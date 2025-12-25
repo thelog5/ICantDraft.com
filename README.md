@@ -93,7 +93,7 @@ Web runs on http://localhost:5173
 
 ---
 
-### Project Structure
+## Project Structure
 apps/api  — Express API + analytics engine  
 apps/web  — React + Vite frontend  
 prisma    — Database schema and migrations  
@@ -101,7 +101,7 @@ docs      — Architecture notes and screenshots (optional)
 
 ---
 
-### Design Principles
+## Design Principles
 - Deterministic analytics only
 - No black-box models
 - Attempt-weighted percentages
@@ -111,5 +111,5 @@ docs      — Architecture notes and screenshots (optional)
 
 ---
 
-### Status
+## Status
 DraftSite is under active development. Current focus areas include UI refinement, analytics expansion, and performance improvements.
