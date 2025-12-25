@@ -1,41 +1,85 @@
-# DraftSite — Fantasy Basketball Analytics
+DraftSite — Fantasy Basketball Analytics
 
-Full-stack fantasy basketball analytics app that ingests ESPN league data and generates deterministic 9-category rankings (no LLMs — pure math).
+DraftSite is a full-stack fantasy basketball analytics platform that ingests ESPN league data and computes deterministic, math-based 9-category analytics. No machine learning, no LLMs — all analytics are math-based, transparent, and reproducible.
 
-## What it does
-- **ESPN ingestion**: pulls league → teams → rosters → players into Postgres
-- **Deterministic 9-cat analytics**:
-  - aggregates team totals
-  - computes league distribution (mean/std)
-  - produces **z-scores**, **category ranks**, and a **power score**
-- **Web dashboard**:
-  - league power rankings table
-  - team profile pages with detailed category stats
+The goal of this project is to mirror how competitive fantasy basketball leagues are actually evaluated, while being built like a real production system.
 
-## Tech Stack
-- **API**: Node + Express + Prisma
-- **DB**: PostgreSQL
-- **Web**: React + Vite + TypeScript
-- **Monorepo**: pnpm workspaces
+FEATURES
+- ESPN fantasy league ingestion using authenticated requests
+- Deterministic 9-category (9-cat) fantasy analytics
+- League-wide z-score normalization
+- Attempt-weighted FG% and FT%
+- Inverted turnover scoring
+- League power rankings
+- Individual team profile analytics
+- React dashboard wired directly to backend API
 
-## Project Structure
-- `apps/api` — Express API + ingestion + analytics endpoints
-- `apps/web` — React dashboard UI
-- `prisma` — schema + migrations
+TECH STACK
+Backend: Node.js, TypeScript, Express, Prisma, PostgreSQL  
+Frontend: React, Vite, TypeScript  
 
-## API Endpoints (local)
-- `POST /ingest/espn` — ingest league data from ESPN into DB
-- `GET /leagues/:leagueId/power-rankings` — league-wide power rankings
-- `GET /leagues/:leagueId/teams` — list teams in league
-- `GET /leagues/:leagueId/teams/:teamId/profile` — team profile + z-scores + ranks
+ANALYTICS MODEL
+The platform uses a standard 9-category fantasy basketball scoring model:
+Points, Rebounds, Assists, Steals, Blocks, 3PT Made, FG%, FT%, Turnovers (inverted).
 
-## Run Locally
+Analytics flow:
+1. Player stats are aggregated into team totals
+2. League-wide means and standard deviations are computed
+3. Teams receive per-category z-scores
+4. Z-scores are converted into win probabilities via a normal CDF
+5. Category probabilities are summed into a normalized 0–9 team score
 
-### Prerequisites
-- Node.js 18+
-- pnpm 9+
-- PostgreSQL running locally
+All calculations are deterministic and computed server-side.
 
-### 1) Install deps
-```bash
+LOCAL DEVELOPMENT
+
+Prerequisites:
+Node.js 18+
+pnpm 9+
+PostgreSQL
+
+Environment setup:
+Create a .env file in the repository root (do NOT commit it):
+
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/draftsite?schema=public"
+PORT=3000
+ESPN_LEAGUE_ID="YOUR_LEAGUE_ID"
+ESPN_SEASON_ID="2026"
+ESPN_S2="YOUR_ESPN_S2_COOKIE"
+ESPN_SWID="{YOUR_SWID_COOKIE}"
+ESPN_PLATFORM_VERSION="ec4491ff98dc3a672229031f460410e0746d6ecc"
+ESPN_BASE_URL="https://lm-api-reads.fantasy.espn.com"
+
+Sensitive values are excluded via .gitignore.
+
+INSTALL
 pnpm install
+
+DATABASE SETUP
+pnpm prisma:generate
+pnpm prisma:migrate
+
+RUN API
+pnpm -C apps/api dev
+API runs on http://localhost:3000
+
+RUN WEB
+pnpm -C apps/web dev
+Web runs on http://localhost:5173
+
+PROJECT STRUCTURE
+apps/api  — Express API + analytics engine  
+apps/web  — React + Vite frontend  
+prisma    — Database schema and migrations  
+docs      — Architecture notes and screenshots (optional)
+
+DESIGN PRINCIPLES
+- Deterministic analytics only
+- No black-box models
+- Attempt-weighted percentages
+- Inverted turnover scoring
+- Clear separation between ingestion, analytics, and UI
+- Built like a real backend-driven system
+
+STATUS
+DraftSite is under active development. Current focus areas include UI refinement, analytics expansion, and performance improvements.
