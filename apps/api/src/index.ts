@@ -34,6 +34,14 @@ console.log("SERVER BUILD ID:", Date.now());
 
 app.use(express.json());
 
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "http://localhost:5173");
+  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 const prisma = new PrismaClient();
 
 // Health check
@@ -604,6 +612,57 @@ app.get("/leagues/:leagueId/overview", async (req, res) => {
   });
 });
 
+// List leagues (so UI can pick the latest one)
+app.get("/leagues", async (_req, res) => {
+  const leagues = await prisma.league.findMany({
+    select: { id: true, name: true, seasonYear: true, provider: true, providerLeagueId: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return res.json({ leagues });
+});
+
+// Power rankings (your existing logic, but ensure it is top-level)
+app.get("/leagues/:leagueId/power-rankings", async (req, res) => {
+  const leagueId = req.params.leagueId;
+
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { id: true, name: true },
+  });
+  if (!league) return res.status(404).json({ error: "League not found" });
+
+  const teams = await prisma.team.findMany({
+    where: { leagueId },
+    select: {
+      id: true,
+      name: true,
+      rosterSlots: { where: { endAt: null }, select: { player: { select: { meta: true } } } },
+    },
+  });
+
+  const teamTotals: TeamTotals[] = teams.map((t) => {
+    const stats = t.rosterSlots.map((s) => extractPlayerStats(s.player.meta).stats);
+    const totals = aggregateTeam(stats);
+    return { ...totals, teamId: t.id, teamName: t.name };
+  });
+
+  const dist = computeLeagueDistributions(teamTotals);
+  const ranks = rankTeams(teamTotals);
+
+  const powerRankings = teamTotals
+    .map((t) => {
+      const z = zScore(t, dist);
+      return {
+        teamId: t.teamId,
+        teamName: t.teamName,
+        score0to9: teamScore(z),
+        ranks: ranks.get(t.teamId),
+      };
+    })
+    .sort((a, b) => b.score0to9 - a.score0to9);
+
+  return res.json({ league, powerRankings });
+});
 
 // ---------- START ----------
 const port = Number(process.env.PORT ?? 3000);
