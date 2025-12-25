@@ -1,6 +1,6 @@
-# DraftSite — Fantasy Basketball Analytics
+# ICantDraft.com — Fantasy Basketball Analytics
 
-DraftSite is a full-stack fantasy basketball analytics platform that ingests ESPN league data and computes deterministic, math-based 9-category analytics. No machine learning, no LLMs — all analytics are math-based, transparent, and reproducible.
+ICantDraft.com is a full-stack fantasy basketball analytics platform that ingests ESPN league data and computes deterministic, math-based 9-category analytics. No machine learning, no LLMs — all analytics are math-based, transparent, and reproducible.
 
 The goal of this project is to mirror how competitive fantasy basketball leagues are actually evaluated, while being built like a real production system.
 
