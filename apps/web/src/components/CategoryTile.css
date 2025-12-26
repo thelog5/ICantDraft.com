@@ -1,0 +1,33 @@
+.category-tile {
+  background-color: #f8f8f8;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  transition: all 0.2s;
+  min-height: 100px;
+}
+
+.category-tile:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-color: #d0d0d0;
+}
+
+.category-tile-label {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.category-tile-rank {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+

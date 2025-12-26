@@ -1,0 +1,130 @@
+.settings-page {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.settings-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 2rem;
+}
+
+.settings-card {
+  background-color: #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+}
+
+.settings-content {
+  margin-top: 1rem;
+}
+
+.settings-message {
+  padding: 0.75rem 1rem;
+  background-color: #e6f2ff;
+  border: 1px solid #0066cc;
+  border-radius: 4px;
+  color: #0066cc;
+  margin-bottom: 1rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.settings-description {
+  color: #666;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.settings-current {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: #f0f7ff;
+  border: 1px solid #0066cc;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+}
+
+.settings-current-label {
+  font-weight: 600;
+  color: #0066cc;
+}
+
+.settings-current-value {
+  color: #222;
+  font-weight: 500;
+}
+
+.settings-input-group {
+  margin-bottom: 1.5rem;
+}
+
+.settings-label {
+  display: block;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 0.5rem;
+  font-size: 0.9375rem;
+}
+
+.settings-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: #0066cc;
+}
+
+.settings-error {
+  padding: 0.75rem;
+  background-color: #fee;
+  border: 1px solid #e31837;
+  border-radius: 4px;
+  color: #e31837;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.settings-success {
+  padding: 0.75rem;
+  background-color: #d4edda;
+  border: 1px solid #00a651;
+  border-radius: 4px;
+  color: #155724;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.settings-save-button {
+  width: 100%;
+  padding: 0.875rem;
+  background-color: #0066cc;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.settings-save-button:hover:not(:disabled) {
+  background-color: #0052a3;
+}
+
+.settings-save-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+

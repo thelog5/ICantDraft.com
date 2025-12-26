@@ -1,0 +1,75 @@
+.team-selector {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.team-selector-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  color: #222;
+}
+
+.team-selector-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.team-selector-item {
+  padding: 1rem 1.5rem;
+  background-color: #fff;
+  border: 2px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.team-selector-item:hover {
+  border-color: #0066cc;
+  background-color: #f0f7ff;
+}
+
+.team-selector-item.selected {
+  border-color: #0066cc;
+  background-color: #e6f2ff;
+  color: #0066cc;
+}
+
+.team-selector-button {
+  width: 100%;
+  padding: 1rem;
+  background-color: #0066cc;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.team-selector-button:hover:not(:disabled) {
+  background-color: #0052a3;
+}
+
+.team-selector-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.team-selector-loading,
+.team-selector-error {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+.team-selector-error {
+  color: #e31837;
+}
+

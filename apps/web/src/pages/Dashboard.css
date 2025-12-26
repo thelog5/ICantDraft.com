@@ -1,0 +1,640 @@
+.dashboard {
+  width: 100%;
+}
+
+.api-error-banner {
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  color: #856404;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.dashboard-card {
+  background-color: #fff;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  padding: 1.5rem;
+  border: 1px solid #e5e5e5;
+  transition: box-shadow 0.2s;
+}
+
+.dashboard-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.category-overview-card {
+  grid-column: 1;
+}
+
+.category-tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.875rem;
+  margin-top: 1rem;
+}
+
+.team-performance-card {
+  grid-column: 2;
+}
+
+.team-performance-content {
+  margin-top: 1rem;
+}
+
+.team-performance-stats {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.team-score-display,
+.projected-wins-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.team-score-label,
+.projected-wins-label {
+  font-size: 0.9375rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.team-score-value,
+.projected-wins-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #222;
+}
+
+.weekly-projections-card {
+  grid-column: 1 / -1;
+}
+
+.weekly-matchup-selector {
+  margin-top: 1rem;
+  background-color: #2d2d2d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.matchup-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background-color: #2d2d2d;
+}
+
+.matchup-teams {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  justify-content: center;
+}
+
+.matchup-team-icon {
+  font-size: 1.25rem;
+}
+
+.matchup-my-team {
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.matchup-nav-btn {
+  background: transparent;
+  border: none;
+  color: #999;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem 0.75rem;
+  transition: color 0.2s;
+}
+
+.matchup-nav-btn:not(:disabled):hover {
+  color: #fff;
+}
+
+.matchup-nav-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+.matchup-score-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background-color: #f8f8f8;
+  border-top: 1px solid #e0e0e0;
+}
+
+.matchup-score {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #222;
+}
+
+.matchup-league-avg {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.weekly-projections-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.matchup-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.matchup-team {
+  font-weight: 600;
+  color: #222;
+}
+
+.matchup-vs {
+  color: #666;
+  font-size: 0.875rem;
+}
+
+.weekly-projections-content {
+  margin-top: 1rem;
+}
+
+.weekly-score {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.weekly-score-label {
+  font-size: 0.9375rem;
+  color: #666;
+}
+
+.weekly-score-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #222;
+}
+
+.weekly-league-avg {
+  font-size: 0.875rem;
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+.weekly-chart-container {
+  margin-top: 1rem;
+}
+
+.weekly-chart-note {
+  font-size: 0.75rem;
+  color: #999;
+  text-align: center;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+.trade-suggestions-card {
+  grid-column: 1 / -1;
+}
+
+.trade-suggestions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.view-all-button {
+  padding: 0.5rem 1rem;
+  background-color: #0066cc;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.view-all-button:hover:not(:disabled) {
+  background-color: #0052a3;
+}
+
+.view-all-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.trade-suggestions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.trade-suggestion-placeholder {
+  background-color: #f8f8f8;
+  border: 2px dashed #d0d0d0;
+  border-radius: 6px;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.trade-placeholder-icon {
+  font-size: 2.5rem;
+  opacity: 0.5;
+}
+
+.trade-placeholder-text {
+  color: #666;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.trade-placeholder-subtext {
+  color: #999;
+  font-size: 0.8125rem;
+  font-style: italic;
+  margin: 0;
+}
+
+.trade-suggestions-empty {
+  margin-top: 1rem;
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.empty-state-text {
+  color: #666;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.trade-suggestion-item {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 1rem;
+  background-color: #f9f9f9;
+}
+
+.trade-suggestion-header {
+  margin-bottom: 0.75rem;
+}
+
+.trade-suggestion-team {
+  font-weight: 600;
+  color: #222;
+  font-size: 0.9375rem;
+}
+
+.trade-suggestion-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.trade-away,
+.trade-get {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.trade-label {
+  font-size: 0.875rem;
+  color: #666;
+  min-width: 80px;
+}
+
+.trade-player {
+  font-weight: 500;
+  color: #222;
+}
+
+.trade-player.highlight {
+  color: #0066cc;
+  font-weight: 600;
+}
+
+.trade-impact {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.impact-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.impact-badge.gain {
+  background-color: #00a651;
+  color: #fff;
+}
+
+.impact-badge.loss {
+  background-color: #e31837;
+  color: #fff;
+}
+
+.trade-suggestions-note {
+  font-size: 0.75rem;
+  color: #999;
+  margin-top: 1rem;
+  font-style: italic;
+}
+
+.trade-suggestions-button {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background-color: #0066cc;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.trade-suggestions-button:hover {
+  background-color: #0052a3;
+}
+
+.team-analysis-card {
+  grid-column: 1;
+}
+
+.team-analysis-list {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.team-analysis-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: #fff;
+  border-bottom: 1px solid #e5e5e5;
+  transition: background-color 0.2s;
+}
+
+.team-analysis-item:last-child {
+  border-bottom: none;
+}
+
+.team-analysis-item:hover {
+  background-color: #f8f8f8;
+}
+
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.player-headshot {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e5e5e5;
+  background-color: #f0f0f0;
+}
+
+.player-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.player-name {
+  font-weight: 600;
+  color: #222;
+  font-size: 1rem;
+}
+
+.player-role {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 3px;
+  display: inline-block;
+  width: fit-content;
+  font-weight: 600;
+}
+
+.player-role.core {
+  background-color: #e8f4f8;
+  color: #0066cc;
+}
+
+.player-role.specialist {
+  background-color: #e8f5ed;
+  color: #00a651;
+}
+
+.player-role.expendable {
+  background-color: #fff4e5;
+  color: #d97706;
+}
+
+.player-role.conflict {
+  background-color: #fee;
+  color: #e31837;
+}
+
+.player-role.roster {
+  background-color: #f3f3f3;
+  color: #666;
+}
+
+.player-positions {
+  font-size: 0.8125rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.team-analysis-empty {
+  margin-top: 1rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.player-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.player-rating.positive {
+  color: #00a651;
+}
+
+.player-rating.negative {
+  color: #e31837;
+}
+
+.player-rating-icon {
+  font-size: 1.25rem;
+}
+
+.team-analysis-note {
+  font-size: 0.75rem;
+  color: #999;
+  margin-top: 1rem;
+  font-style: italic;
+}
+
+.punt-strategy-card {
+  grid-column: 2;
+}
+
+.punt-strategy-content {
+  margin-top: 1.25rem;
+  background-color: #f8f8f8;
+  border-radius: 6px;
+  padding: 1.25rem;
+}
+
+.punt-strategy-recommendation,
+.punt-strategy-focus {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.punt-strategy-focus {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.punt-strategy-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #666;
+  margin-bottom: 0.75rem;
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.punt-strategy-categories {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.punt-category-badge {
+  padding: 0.5rem 1rem;
+  background-color: #e31837;
+  color: #fff;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.9375rem;
+}
+
+.punt-strategy-focus-cats {
+  font-size: 1rem;
+  color: #222;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.punt-impact-chart-container {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background-color: #fff;
+  border-radius: 4px;
+  border: 1px solid #e5e5e5;
+}
+
+.punt-impact-chart-container h4 {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #666;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .category-overview-card,
+  .team-performance-card,
+  .team-analysis-card,
+  .punt-strategy-card {
+    grid-column: 1;
+  }
+
+  .trade-suggestions-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .category-tiles-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .weekly-projections-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .trade-suggestions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .category-tiles-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

@@ -1,0 +1,67 @@
+.punt-strategy-page {
+  width: 100%;
+}
+
+.punt-strategy-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 2rem;
+}
+
+.punt-strategy-card-full {
+  background-color: #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+}
+
+.punt-strategy-content-full {
+  margin-top: 1rem;
+}
+
+.punt-strategy-recommendation-full,
+.punt-strategy-focus-full {
+  margin-bottom: 2rem;
+}
+
+.punt-strategy-label-full {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.punt-strategy-categories-full {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.punt-category-badge-full {
+  padding: 0.75rem 1.5rem;
+  background-color: #e31837;
+  color: #fff;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.punt-strategy-focus-cats-full {
+  font-size: 1.125rem;
+  color: #222;
+  font-weight: 500;
+}
+
+.punt-impact-chart-container-full {
+  margin-top: 3rem;
+}
+
+.punt-impact-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 1.5rem;
+}
+

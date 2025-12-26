@@ -1,0 +1,201 @@
+.team-header {
+  background: linear-gradient(135deg, #fff 0%, #f8f8f8 100%);
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.team-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.team-avatar {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: linear-gradient(135deg, #e31837 0%, #c41230 100%);
+  flex-shrink: 0;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(227, 24, 55, 0.2);
+}
+
+.team-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.team-avatar-initials {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.team-avatar-initials.hidden {
+  display: none;
+}
+
+.team-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.team-header-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111;
+  margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+}
+
+.team-header-label {
+  color: #666;
+  font-weight: 500;
+  font-size: 1.125rem;
+}
+
+.team-header-league {
+  color: #666;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.team-header-right {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.team-header-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.team-header-stat-label {
+  font-size: 0.75rem;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.team-header-stat-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #222;
+}
+
+.team-header-stat-value.unavailable {
+  font-size: 0.875rem;
+  color: #999;
+  font-style: italic;
+  font-weight: 500;
+}
+
+.team-header-matchup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: #f8f8f8;
+  border-radius: 6px;
+  border: 1px solid #e5e5e5;
+}
+
+.matchup-label {
+  font-size: 0.75rem;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.matchup-scores {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.matchup-my-team,
+.matchup-opponent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.matchup-team-name-short {
+  font-size: 0.8125rem;
+  color: #666;
+  font-weight: 600;
+}
+
+.matchup-score-display {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #222;
+  font-family: monospace;
+}
+
+.matchup-vs {
+  font-size: 0.75rem;
+  color: #999;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+@media (max-width: 768px) {
+  .team-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.25rem;
+    padding: 1.25rem 1.5rem;
+  }
+
+  .team-header-right {
+    width: 100%;
+    justify-content: space-around;
+    gap: 1rem;
+  }
+
+  .team-avatar {
+    width: 56px;
+    height: 56px;
+  }
+
+  .team-avatar-initials {
+    font-size: 1.25rem;
+  }
+
+  .team-header-title {
+    font-size: 1.25rem;
+  }
+
+  .team-header-label {
+    font-size: 1rem;
+  }
+}
+

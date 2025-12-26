@@ -1,0 +1,52 @@
+.league-selector {
+  margin-bottom: 2rem;
+}
+
+.league-selector-input-group {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.league-selector-input {
+  flex: 1;
+  max-width: 400px;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.league-selector-input:focus {
+  outline: none;
+  border-color: #0066cc;
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.league-selector-button {
+  background-color: #0066cc;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.league-selector-button:hover:not(:disabled) {
+  background-color: #0052a3;
+}
+
+.league-selector-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.league-selector-error {
+  margin-top: 0.5rem;
+  color: #dc3545;
+  font-size: 0.875rem;
+}
+

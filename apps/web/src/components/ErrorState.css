@@ -1,0 +1,35 @@
+.error-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+}
+
+.error-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.error-message {
+  color: #dc3545;
+  font-size: 1.125rem;
+  margin-bottom: 1.5rem;
+}
+
+.error-retry {
+  background-color: #0066cc;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.error-retry:hover {
+  background-color: #0052a3;
+}
+
