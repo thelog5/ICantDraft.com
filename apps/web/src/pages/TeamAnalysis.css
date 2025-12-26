@@ -1,0 +1,130 @@
+.back-link {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: #0066cc;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.team-analysis-header {
+  margin-bottom: 2rem;
+}
+
+.team-analysis-header h1 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.team-analysis-meta {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.team-analysis-score {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #0066cc;
+}
+
+.team-analysis-timestamp {
+  color: #666;
+  font-size: 0.875rem;
+}
+
+.warning-card {
+  background-color: #fff3cd;
+  border-color: #ffc107;
+  margin-bottom: 1.5rem;
+}
+
+.warning-text {
+  color: #856404;
+}
+
+.strengths-weaknesses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+}
+
+.strengths-title,
+.weaknesses-title {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  color: #333;
+}
+
+.category-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.punt-explanation {
+  color: #666;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.punt-candidates {
+  margin-top: 1rem;
+}
+
+.punt-candidates h3 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  color: #333;
+}
+
+.trade-suggestions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.trade-target {
+  padding: 1rem;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+}
+
+.trade-target h4 {
+  margin: 0 0 0.5rem 0;
+  color: #333;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+}
+
+.trade-target p {
+  margin: 0;
+  color: #666;
+  font-size: 0.875rem;
+}
+
+.todo-note {
+  padding: 1rem;
+  background-color: #e9ecef;
+  border-left: 4px solid #0066cc;
+  border-radius: 4px;
+  color: #495057;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 768px) {
+  .team-analysis-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .strengths-weaknesses {
+    grid-template-columns: 1fr;
+  }
+}
+

@@ -1,0 +1,39 @@
+.simple-chart {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.simple-chart.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.simple-chart-empty-message {
+  color: #999;
+  font-size: 0.875rem;
+}
+
+.simple-chart-svg {
+  display: block;
+}
+
+.simple-chart-bar {
+  transition: fill 0.2s;
+}
+
+.simple-chart-bar:hover {
+  fill: #0052a3;
+}
+
+.simple-chart-label {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.simple-chart-value {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+

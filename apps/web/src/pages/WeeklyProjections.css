@@ -1,0 +1,107 @@
+.weekly-projections-page {
+  width: 100%;
+}
+
+.weekly-projections-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.weekly-projections-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #222;
+  margin: 0;
+}
+
+.weekly-projections-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.week-selector-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  color: #222;
+}
+
+.week-selector {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9375rem;
+}
+
+.weekly-projections-card-full {
+  background-color: #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+}
+
+.matchup-header-full {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 1.125rem;
+}
+
+.matchup-team {
+  font-weight: 600;
+  color: #222;
+}
+
+.matchup-vs {
+  color: #666;
+  font-size: 0.9375rem;
+}
+
+.weekly-projections-content-full {
+  margin-top: 1rem;
+}
+
+.weekly-score-full {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.weekly-score-label {
+  font-size: 1rem;
+  color: #666;
+}
+
+.weekly-score-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #222;
+}
+
+.weekly-league-avg-full {
+  text-align: center;
+  font-size: 0.9375rem;
+  color: #666;
+  margin-bottom: 2rem;
+}
+
+.weekly-chart-container-full {
+  margin-top: 2rem;
+}
+
+.weekly-chart-note {
+  font-size: 0.75rem;
+  color: #999;
+  text-align: center;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+

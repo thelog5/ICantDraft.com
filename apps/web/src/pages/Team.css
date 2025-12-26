@@ -1,0 +1,150 @@
+.team-page {
+  width: 100%;
+}
+
+.team-header {
+  margin-bottom: 2rem;
+}
+
+.team-header-main {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.team-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #222;
+  margin: 0;
+}
+
+.team-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: #0066cc;
+  color: #fff;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.team-badge-label {
+  font-size: 0.875rem;
+}
+
+.team-badge-value {
+  font-size: 1.125rem;
+}
+
+.team-meta {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2rem;
+}
+
+.team-card {
+  background-color: #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+}
+
+.team-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.team-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.team-stat-label {
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.team-stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #222;
+}
+
+.category-ranks-list {
+  margin-top: 1rem;
+}
+
+.punt-strategy-card {
+  grid-column: 1 / -1;
+}
+
+.punt-strategy-content {
+  margin-top: 1rem;
+}
+
+.punt-strategy-recommendation {
+  margin-bottom: 1rem;
+}
+
+.punt-strategy-label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.punt-strategy-categories {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.punt-category-badge {
+  padding: 0.5rem 1rem;
+  background-color: #e31837;
+  color: #fff;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.punt-strategy-explanation {
+  font-size: 0.875rem;
+  color: #666;
+  line-height: 1.6;
+}
+
+@media (max-width: 1024px) {
+  .team-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .team-header-main {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .team-title {
+    font-size: 2rem;
+  }
+
+  .team-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

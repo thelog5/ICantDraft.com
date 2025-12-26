@@ -1,0 +1,80 @@
+.rankings {
+  width: 100%;
+}
+
+.rankings-header {
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.rankings-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #222;
+  margin: 0;
+}
+
+.rankings-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.rankings-search {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9375rem;
+  min-width: 200px;
+}
+
+.rankings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.rankings-toggle input {
+  cursor: pointer;
+}
+
+.rankings-card {
+  background-color: #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+  overflow-x: auto;
+}
+
+.my-team-row {
+  background-color: #e6f2ff !important;
+  font-weight: 600;
+}
+
+.my-team-row:hover {
+  background-color: #d0e7ff !important;
+}
+
+@media (max-width: 768px) {
+  .rankings-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .rankings-controls {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rankings-search {
+    width: 100%;
+  }
+}
+

@@ -1,0 +1,133 @@
+.trade-suggestions-page {
+  width: 100%;
+}
+
+.trade-suggestions-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 2rem;
+}
+
+.trade-suggestions-card-full {
+  background-color: #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+}
+
+.trade-suggestions-empty {
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.empty-state-text {
+  color: #666;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.trade-suggestion-item-full {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 1.5rem;
+  background-color: #f9f9f9;
+}
+
+.trade-suggestion-header-full {
+  margin-bottom: 1rem;
+}
+
+.trade-suggestion-team {
+  font-weight: 600;
+  color: #222;
+  font-size: 1rem;
+}
+
+.trade-suggestion-details-full {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.trade-away-full,
+.trade-get-full {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.trade-label-full {
+  font-size: 0.9375rem;
+  color: #666;
+  min-width: 100px;
+  font-weight: 500;
+}
+
+.trade-player-full {
+  font-weight: 500;
+  color: #222;
+  font-size: 0.9375rem;
+}
+
+.trade-player-full.highlight {
+  color: #0066cc;
+  font-weight: 600;
+}
+
+.trade-impact-full {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.impact-badge-full {
+  padding: 0.375rem 0.75rem;
+  border-radius: 3px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.impact-badge-full.gain {
+  background-color: #00a651;
+  color: #fff;
+}
+
+.impact-badge-full.loss {
+  background-color: #e31837;
+  color: #fff;
+}
+
+.trade-suggestions-note-full {
+  font-size: 0.875rem;
+  color: #999;
+  margin-top: 2rem;
+  font-style: italic;
+  text-align: center;
+}
+
+.trade-suggestions-button-full {
+  margin-top: 1.5rem;
+  width: 100%;
+  padding: 0.875rem;
+  background-color: #0066cc;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.trade-suggestions-button-full:hover {
+  background-color: #0052a3;
+}
+
+@media (max-width: 768px) {
+  .trade-suggestions-list-full {
+    grid-template-columns: 1fr;
+  }
+}
+

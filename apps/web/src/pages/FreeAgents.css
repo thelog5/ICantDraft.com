@@ -1,0 +1,49 @@
+.free-agents-filters {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.free-agents-filter {
+  padding: 0.75rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+  background: white;
+  cursor: pointer;
+}
+
+.free-agents-filter:focus {
+  outline: none;
+  border-color: #0066cc;
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.free-agents-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.free-agents-toggle input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.free-agents-chart-container {
+  margin: 1.5rem 0;
+}
+
+.todo-note {
+  padding: 1rem;
+  background-color: #e9ecef;
+  border-left: 4px solid #0066cc;
+  border-radius: 4px;
+  color: #495057;
+  font-size: 0.875rem;
+  margin-top: 1rem;
+}
+
