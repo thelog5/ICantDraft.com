@@ -22,10 +22,12 @@ export default function CategoryTile({ category, rank, totalTeams }: CategoryTil
     return "#e31837"; // red
   };
 
+  const hoverText = `${rank}/${totalTeams}`;
+
   return (
-    <div className="category-tile">
+    <div className="category-tile" title={hoverText}>
       <div className="category-tile-label">{category}</div>
-      <div className="category-tile-rank" style={{ color: getColor() }}>
+      <div className="category-tile-rank" style={{ color: getColor() }} title={hoverText}>
         {getRankText()}
       </div>
     </div>

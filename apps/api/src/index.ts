@@ -13,6 +13,7 @@ import {
   type TeamTotals,
   type TeamProfile,
 } from "./lib/analytics.js";
+import { extractNineCatFromPlayerMeta, getStatsDebugInfo } from "./lib/playerStats.js";
 
 // ---------- ENV LOADING ----------
 const __filename = fileURLToPath(import.meta.url);
@@ -317,10 +318,182 @@ app.get("/leagues/:leagueId/teams/:teamId/roster", async (req, res) => {
       };
     });
 
+    res.setHeader("Cache-Control", "public, max-age=60");
     return res.json({ teamId: team.id, teamName: team.name, roster });
   } catch (err) {
     console.error("Error fetching roster:", err);
     return res.status(500).json({ error: "Failed to fetch roster" });
+  }
+});
+
+// Get team roster with player stats
+app.get("/leagues/:leagueId/teams/:teamId/roster/stats", async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const teamId = req.params.teamId;
+
+  try {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, seasonYear: true },
+    });
+    if (!league) return res.status(404).json({ error: "League not found" });
+
+    const team = await prisma.team.findFirst({
+      where: { id: teamId, leagueId },
+      select: { id: true, name: true },
+    });
+    if (!team) return res.status(404).json({ error: "Team not found or not in league" });
+
+    const rosterSlots = await prisma.rosterSlot.findMany({
+      where: { teamId, endAt: null },
+      select: {
+        player: { select: { id: true, fullName: true, providerPlayerId: true, meta: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const roster = rosterSlots.map((slot) => {
+      const player = slot.player;
+      const meta = (player.meta as any) || {};
+      const positions = meta.positions || [];
+
+      let headshotUrl: string | null = null;
+      if (player.providerPlayerId) {
+        headshotUrl = proxiedImage(
+          req,
+          `https://a.espncdn.com/i/headshots/nba/players/full/${player.providerPlayerId}.png`
+        );
+      }
+
+      // Extract player stats with normalized source metadata, filtered by league seasonYear
+      const playerStats = extractNineCatFromPlayerMeta(meta, league.seasonYear);
+
+      return {
+        id: player.id,
+        fullName: player.fullName,
+        providerPlayerId: player.providerPlayerId,
+        positions,
+        headshotUrl,
+        stats: {
+          perGame: playerStats.perGame,
+          totals: playerStats.totals,
+          source: playerStats.source, // Include source metadata for debugging
+        },
+        derived: playerStats.hasStats ? {
+          roleHint: null, // Will be computed on frontend
+        } : undefined,
+      };
+    });
+
+    res.setHeader("Cache-Control", "public, max-age=60");
+    return res.json({ teamId: team.id, teamName: team.name, roster });
+  } catch (err) {
+    console.error("Error fetching roster stats:", err);
+    return res.status(500).json({ error: "Failed to fetch roster stats" });
+  }
+});
+
+// Get weekly projection for team
+app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const teamId = req.params.teamId;
+
+  try {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, seasonYear: true },
+    });
+    if (!league) return res.status(404).json({ error: "League not found" });
+
+    const team = await prisma.team.findFirst({
+      where: { id: teamId, leagueId },
+      select: { id: true, name: true },
+    });
+    if (!team) return res.status(404).json({ error: "Team not found or not in league" });
+
+    const rosterSlots = await prisma.rosterSlot.findMany({
+      where: { teamId, endAt: null },
+      select: {
+        player: { select: { id: true, fullName: true, meta: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    // Extract per-game stats for all players, filtered by league seasonYear
+    const playerProjections = rosterSlots.map((slot) => {
+      const player = slot.player;
+      const meta = (player.meta as any) || {};
+      const playerStats = extractNineCatFromPlayerMeta(meta, league.seasonYear);
+      
+      return {
+        playerId: player.id,
+        playerName: player.fullName,
+        perGame: playerStats.perGame,
+        gp: playerStats.totals.gp,
+        hasStats: playerStats.hasStats,
+        totals: playerStats.totals,
+      };
+    });
+
+    // Sum per-game stats (baseline projection)
+    // This assumes all players play their average per-game stats
+    const cats = {
+      pts: 0,
+      reb: 0,
+      ast: 0,
+      stl: 0,
+      blk: 0,
+      threes: 0,
+      tov: 0,
+      fgPct: 0,
+      ftPct: 0,
+    };
+
+    let totalFga = 0;
+    let totalFgm = 0;
+    let totalFta = 0;
+    let totalFtm = 0;
+
+    for (const proj of playerProjections) {
+      if (proj.hasStats) {
+        cats.pts += proj.perGame.pts;
+        cats.reb += proj.perGame.reb;
+        cats.ast += proj.perGame.ast;
+        cats.stl += proj.perGame.stl;
+        cats.blk += proj.perGame.blk;
+        cats.threes += proj.perGame.threes;
+        cats.tov += proj.perGame.tov;
+        
+        // For percentages, we need to track attempts per game
+        const fga = proj.totals.fga / Math.max(1, proj.totals.gp);
+        const fgm = proj.totals.fgm / Math.max(1, proj.totals.gp);
+        const fta = proj.totals.fta / Math.max(1, proj.totals.gp);
+        const ftm = proj.totals.ftm / Math.max(1, proj.totals.gp);
+        
+        totalFga += fga;
+        totalFgm += fgm;
+        totalFta += fta;
+        totalFtm += ftm;
+      }
+    }
+
+    cats.fgPct = totalFga > 0 ? totalFgm / totalFga : 0;
+    cats.ftPct = totalFta > 0 ? totalFtm / totalFta : 0;
+
+    res.setHeader("Cache-Control", "public, max-age=60");
+    return res.json({
+      projectionType: "baseline",
+      note: "Baseline projection using per-game averages. Games remaining not yet available.",
+      cats,
+      byPlayer: playerProjections.map((p) => ({
+        playerId: p.playerId,
+        playerName: p.playerName,
+        perGame: p.perGame,
+      })),
+    });
+  } catch (err) {
+    console.error("Error fetching weekly projection:", err);
+    return res.status(500).json({ error: "Failed to fetch weekly projection" });
   }
 });
 
@@ -575,6 +748,184 @@ app.get("/debug/espn-player", async (_req, res) => {
   const player = data?.teams?.[0]?.roster?.entries?.[0]?.playerPoolEntry?.player ?? null;
 
   return res.status(200).json({ ok: true, player });
+});
+
+// Debug endpoint for player stats selection
+app.get("/debug/player/:providerPlayerId/stats", async (req, res) => {
+  const providerPlayerId = req.params.providerPlayerId;
+  const leagueId = req.query.leagueId as string | undefined;
+
+  try {
+    const player = await prisma.player.findFirst({
+      where: { providerPlayerId },
+      select: { id: true, fullName: true, providerPlayerId: true, meta: true },
+    });
+
+    if (!player) {
+      return res.status(404).json({ error: "Player not found" });
+    }
+
+    // Get seasonYear from league if leagueId is provided
+    let seasonYear: number | null = null;
+    if (leagueId) {
+      const league = await prisma.league.findUnique({
+        where: { id: leagueId },
+        select: { seasonYear: true },
+      });
+      if (league) {
+        seasonYear = league.seasonYear;
+      }
+    }
+
+    const meta = (player.meta as any) || {};
+    const statsResult = extractNineCatFromPlayerMeta(meta, seasonYear);
+    const debugInfo = getStatsDebugInfo(meta, seasonYear);
+
+    // Format candidate info for response
+    const candidates = debugInfo.candidates.map((c) => ({
+      statSourceId: c.statSourceId,
+      scoringPeriodId: c.scoringPeriodId,
+      statSplitTypeId: c.statSplitTypeId,
+      score: c.score,
+      sampleStats: {
+        pts: typeof c.block?.stats?.["0"] === "number" ? c.block.stats["0"] : null,
+        reb: typeof c.block?.stats?.["6"] === "number" ? c.block.stats["6"] : null,
+        ast: typeof c.block?.stats?.["4"] === "number" ? c.block.stats["4"] : null,
+      },
+    }));
+
+    const selected = debugInfo.selected
+      ? {
+          statSourceId: debugInfo.selected.statSourceId,
+          scoringPeriodId: debugInfo.selected.scoringPeriodId,
+          statSplitTypeId: debugInfo.selected.statSplitTypeId,
+          score: debugInfo.selected.score,
+        }
+      : null;
+
+    return res.json({
+      player: {
+        id: player.id,
+        fullName: player.fullName,
+        providerPlayerId: player.providerPlayerId,
+      },
+      seasonYear: seasonYear,
+      selected,
+      candidates,
+      allBlocks: debugInfo.allBlocks,
+      computedStats: {
+        perGame: statsResult.perGame,
+        totals: statsResult.totals,
+        gamesPlayed: statsResult.totals.gp,
+        source: statsResult.source,
+      },
+    });
+  } catch (err) {
+    console.error("Error in debug/player/stats:", err);
+    return res.status(500).json({ error: "Failed to fetch player stats debug info" });
+  }
+});
+
+// Debug endpoint for player season selection
+app.get("/debug/player/:providerPlayerId/season", async (req, res) => {
+  const providerPlayerId = req.params.providerPlayerId;
+  const leagueId = req.query.leagueId as string | undefined;
+
+  try {
+    const player = await prisma.player.findFirst({
+      where: { providerPlayerId },
+      select: { id: true, fullName: true, providerPlayerId: true, meta: true },
+    });
+
+    if (!player) {
+      return res.status(404).json({ error: "Player not found" });
+    }
+
+    // Get seasonYear from league if leagueId is provided
+    let resolvedSeasonYear: number | null = null;
+    let leagueInfo: { id: string; name: string; seasonYear: number } | null = null;
+    
+    if (leagueId) {
+      const league = await prisma.league.findUnique({
+        where: { id: leagueId },
+        select: { id: true, name: true, seasonYear: true },
+      });
+      if (league) {
+        resolvedSeasonYear = league.seasonYear;
+        leagueInfo = league;
+      }
+    } else {
+      // Try to find a league from the player's roster slots
+      const rosterSlot = await prisma.rosterSlot.findFirst({
+        where: { playerId: player.id, endAt: null },
+        select: {
+          league: {
+            select: { id: true, name: true, seasonYear: true },
+          },
+        },
+      });
+      if (rosterSlot?.league) {
+        resolvedSeasonYear = rosterSlot.league.seasonYear;
+        leagueInfo = rosterSlot.league;
+      }
+    }
+
+    const meta = (player.meta as any) || {};
+    const blocks: any[] = Array.isArray(meta?.stats) ? meta.stats : [];
+
+    // Analyze all blocks to see which seasons are present
+    const seasonIdsInBlocks = new Set<number>();
+    blocks.forEach((block) => {
+      if (block?.seasonId && typeof block.seasonId === "number") {
+        seasonIdsInBlocks.add(block.seasonId);
+      }
+    });
+
+    const statsResult = extractNineCatFromPlayerMeta(meta, resolvedSeasonYear);
+    const debugInfo = getStatsDebugInfo(meta, resolvedSeasonYear);
+
+    const selected = debugInfo.selected
+      ? {
+          statSourceId: debugInfo.selected.statSourceId,
+          scoringPeriodId: debugInfo.selected.scoringPeriodId,
+          statSplitTypeId: debugInfo.selected.statSplitTypeId,
+          seasonId: typeof debugInfo.selected.block?.seasonId === "number" ? debugInfo.selected.block.seasonId : null,
+          score: debugInfo.selected.score,
+          reason: resolvedSeasonYear
+            ? `Selected because seasonId ${debugInfo.selected.block?.seasonId || "N/A"} matches league seasonYear ${resolvedSeasonYear}`
+            : "No seasonYear filter applied (no leagueId provided)",
+        }
+      : null;
+
+    return res.json({
+      player: {
+        id: player.id,
+        fullName: player.fullName,
+        providerPlayerId: player.providerPlayerId,
+      },
+      league: leagueInfo,
+      resolvedSeasonYear: resolvedSeasonYear,
+      seasonIdsInBlocks: Array.from(seasonIdsInBlocks).sort((a, b) => b - a),
+      selected,
+      allBlocks: debugInfo.allBlocks.map((b) => ({
+        ...b,
+        seasonId: blocks.find((bl) => 
+          bl?.statSourceId === b.statSourceId &&
+          bl?.scoringPeriodId === b.scoringPeriodId &&
+          bl?.statSplitTypeId === b.statSplitTypeId
+        )?.seasonId || null,
+      })),
+      computedStats: {
+        perGame: statsResult.perGame,
+        totals: statsResult.totals,
+        gamesPlayed: statsResult.totals.gp,
+        source: statsResult.source,
+      },
+    });
+  } catch (err) {
+    console.error("Error in debug/player/season:", err);
+    return res.status(500).json({ error: "Failed to fetch player season debug info" });
+  }
 });
 
 app.post("/ingest/espn", async (_req, res) => {
@@ -874,7 +1225,7 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
 
   const league = await prisma.league.findUnique({
     where: { id: leagueId },
-    select: { id: true },
+    select: { id: true, seasonYear: true },
   });
   if (!league) return res.status(404).json({ error: "League not found" });
 
@@ -899,7 +1250,7 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
   const teamsTotals: TeamTotals[] = [];
 
   for (const t of allTeams) {
-    const playerStats = t.rosterSlots.map((slot) => extractPlayerStats(slot.player.meta).stats);
+    const playerStats = t.rosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
     const totals = aggregateTeam(playerStats);
     teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
   }
@@ -917,7 +1268,7 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
 
   const targetRoster = allTeams.find((t) => t.id === teamId);
   const statsMissing =
-    targetRoster?.rosterSlots.some((slot) => extractPlayerStats(slot.player.meta).missing) ?? false;
+    targetRoster?.rosterSlots.some((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).missing) ?? false;
 
   const profile: TeamProfile = {
     teamId: team.id,
@@ -962,7 +1313,7 @@ app.get("/leagues/:leagueId/power-rankings", async (req, res) => {
 
   const league = await prisma.league.findUnique({
     where: { id: leagueId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, seasonYear: true },
   });
   if (!league) return res.status(404).json({ error: "League not found" });
 
@@ -976,7 +1327,7 @@ app.get("/leagues/:leagueId/power-rankings", async (req, res) => {
   });
 
   const teamTotals: TeamTotals[] = teams.map((t) => {
-    const stats = t.rosterSlots.map((s) => extractPlayerStats(s.player.meta).stats);
+    const stats = t.rosterSlots.map((s) => extractPlayerStats(s.player.meta, league.seasonYear).stats);
     const totals = aggregateTeam(stats);
     return { ...totals, teamId: t.id, teamName: t.name };
   });
@@ -1000,7 +1351,7 @@ app.get("/leagues/:leagueId/overview", async (req, res) => {
 
   const league = await prisma.league.findUnique({
     where: { id: leagueId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, seasonYear: true },
   });
   if (!league) return res.status(404).json({ error: "League not found" });
 
@@ -1014,7 +1365,7 @@ app.get("/leagues/:leagueId/overview", async (req, res) => {
   });
 
   const teamTotals: TeamTotals[] = teams.map((t) => {
-    const stats = t.rosterSlots.map((s) => extractPlayerStats(s.player.meta).stats);
+    const stats = t.rosterSlots.map((s) => extractPlayerStats(s.player.meta, league.seasonYear).stats);
     const totals = aggregateTeam(stats);
     return { ...totals, teamId: t.id, teamName: t.name };
   });

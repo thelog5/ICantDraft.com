@@ -70,7 +70,7 @@
 }
 
 .player-cell {
-  min-width: 200px;
+  min-width: 250px;
 }
 
 .player-info-cell {
@@ -88,6 +88,15 @@
   flex-shrink: 0;
 }
 
+.player-headshot-large {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e5e5e5;
+  flex-shrink: 0;
+}
+
 .player-headshot-placeholder {
   width: 48px;
   height: 48px;
@@ -96,9 +105,72 @@
   flex-shrink: 0;
 }
 
+.player-headshot-placeholder-large {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-color: #f0f0f0;
+  flex-shrink: 0;
+}
+
+.player-name-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.player-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .player-name-cell {
   font-weight: 600;
   color: #222;
+}
+
+.player-role-reason {
+  font-size: 0.75rem;
+  color: #666;
+  font-weight: 400;
+}
+
+.player-role-pill {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.player-role-pill.role-green {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.player-role-pill.role-blue {
+  background-color: #cce5ff;
+  color: #004085;
+}
+
+.player-role-pill.role-yellow {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.player-role-pill.role-red {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.player-role-pill.role-gray {
+  background-color: #e9ecef;
+  color: #495057;
 }
 
 .position-cell {
@@ -122,15 +194,16 @@
 .roster-note {
   margin-top: 1rem;
   padding: 0.875rem;
-  background-color: #fff9e6;
-  border: 1px solid #ffe8a3;
+  background-color: #f8f9fa;
+  border: 1px solid #e5e5e5;
   border-radius: 4px;
-  color: #856404;
+  text-align: center;
 }
 
 .roster-note small {
   font-size: 0.8125rem;
   line-height: 1.5;
+  color: #666;
 }
 
 /* Strengths & Weaknesses */

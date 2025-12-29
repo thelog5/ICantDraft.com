@@ -4,8 +4,8 @@
 }
 
 .topnav-header {
-  background-color: #fff;
-  border-bottom: 1px solid #e5e5e5;
+  background-color: #2d2d2d;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   padding: 0 2rem;
   display: flex;
   justify-content: space-between;
@@ -27,7 +27,7 @@
   align-items: center;
   gap: 0.5rem;
   text-decoration: none;
-  color: #222;
+  color: #fff;
   font-weight: 700;
   font-size: 1.25rem;
   padding: 1rem 0;
@@ -50,7 +50,7 @@
 .topnav-tab {
   padding: 1rem 1.25rem;
   text-decoration: none;
-  color: #666;
+  color: #ccc;
   font-size: 0.9375rem;
   font-weight: 500;
   border-bottom: 3px solid transparent;
@@ -58,13 +58,13 @@
 }
 
 .topnav-tab:hover {
-  color: #222;
-  background-color: #f9f9f9;
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .topnav-tab.active {
-  color: #e31837;
-  border-bottom-color: #e31837;
+  color: #fff;
+  border-bottom-color: #fff;
   font-weight: 600;
 }
 
@@ -82,13 +82,13 @@
 
 .topnav-team-label {
   font-size: 0.875rem;
-  color: #666;
+  color: #ccc;
   font-weight: 500;
 }
 
 .topnav-team-name {
   font-size: 0.9375rem;
-  color: #222;
+  color: #fff;
   font-weight: 600;
 }
 
@@ -105,13 +105,13 @@
 
 .topnav-league-label {
   font-size: 0.875rem;
-  color: #666;
+  color: #ccc;
   font-weight: 500;
 }
 
 .topnav-league-name {
   font-size: 0.9375rem;
-  color: #222;
+  color: #fff;
   font-weight: 600;
 }
 

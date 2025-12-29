@@ -221,6 +221,90 @@ export const api = {
     return fetchJson(`${API_BASE_URL}/leagues/${leagueId}/teams/${teamId}/roster`);
   },
 
+  async getRosterStats(leagueId: string, teamId: string): Promise<{
+    teamId: string;
+    teamName: string;
+    roster: Array<{
+      id: string;
+      fullName: string;
+      providerPlayerId: string | null;
+      positions: string[];
+      headshotUrl: string | null;
+      stats: {
+        perGame: {
+          pts: number;
+          reb: number;
+          ast: number;
+          stl: number;
+          blk: number;
+          threes: number;
+          fgPct: number;
+          ftPct: number;
+          tov: number;
+        };
+        totals: {
+          pts: number;
+          reb: number;
+          ast: number;
+          stl: number;
+          blk: number;
+          threes: number;
+          fgPct: number;
+          ftPct: number;
+          tov: number;
+          fgm: number;
+          fga: number;
+          ftm: number;
+          fta: number;
+          gp: number;
+        };
+        source?: {
+          statSourceId: number;
+          scoringPeriodId: number;
+          statSplitTypeId: number | undefined;
+        };
+      };
+      derived?: {
+        roleHint?: string | null;
+      };
+    }>;
+  }> {
+    return fetchJson(`${API_BASE_URL}/leagues/${leagueId}/teams/${teamId}/roster/stats`);
+  },
+
+  async getWeeklyProjection(leagueId: string, teamId: string): Promise<{
+    projectionType: string;
+    note?: string;
+    cats: {
+      pts: number;
+      reb: number;
+      ast: number;
+      stl: number;
+      blk: number;
+      threes: number;
+      fgPct: number;
+      ftPct: number;
+      tov: number;
+    };
+    byPlayer: Array<{
+      playerId: string;
+      playerName: string;
+      perGame: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        fgPct: number;
+        ftPct: number;
+        tov: number;
+      };
+    }>;
+  }> {
+    return fetchJson(`${API_BASE_URL}/leagues/${leagueId}/teams/${teamId}/weekly-projection`);
+  },
+
   async getTeamHeader(leagueId: string, teamId: string): Promise<{
     league: {
       id: string;

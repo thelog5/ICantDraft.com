@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import TopNav from "../components/TopNav";
-import { getResolvedLeagueId, getResolvedTeamId, hasSettings } from "../lib/settings";
+import { useActiveContext } from "../hooks/useActiveContext";
 import { api, TeamProfileResponse, ApiError } from "../lib/api";
 import Card from "../components/Card";
 import PuntImpactChart from "../components/PuntImpactChart";
@@ -10,30 +9,24 @@ import ErrorState from "../components/ErrorState";
 import "./PuntStrategy.css";
 
 export default function PuntStrategy() {
-  const navigate = useNavigate();
+  const { loading: contextLoading, ctx } = useActiveContext();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<TeamProfileResponse | null>(null);
-  const leagueId = getResolvedLeagueId();
-  const teamId = getResolvedTeamId();
 
   useEffect(() => {
-    if (!hasSettings() || !leagueId || !teamId) {
-      navigate("/settings");
-      return;
-    }
-
+    if (contextLoading || !ctx) return;
     loadData();
-  }, [leagueId, teamId, navigate]);
+  }, [ctx, contextLoading]);
 
   const loadData = async () => {
-    if (!leagueId || !teamId) return;
+    if (!ctx) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const profileData = await api.getTeamProfile(leagueId, teamId);
+      const profileData = await api.getTeamProfile(ctx.leagueId, ctx.teamId);
       setProfile(profileData);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -46,7 +39,7 @@ export default function PuntStrategy() {
     }
   };
 
-  if (loading) {
+  if (contextLoading || loading || !ctx) {
     return (
       <TopNav>
         <div className="punt-strategy-page">

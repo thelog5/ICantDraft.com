@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { getResolvedLeagueName, getResolvedTeamName } from "../lib/settings";
+import { getActiveContext } from "../lib/activeContext";
 import { api } from "../lib/api";
 import "./TopNav.css";
 
@@ -16,11 +16,12 @@ export default function TopNav({ children, onRefresh }: TopNavProps) {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    const storedLeagueName = getResolvedLeagueName();
-    const storedTeamName = getResolvedTeamName();
-    if (storedLeagueName) setLeagueName(storedLeagueName);
-    if (storedTeamName) setTeamName(storedTeamName);
-  }, []);
+    const ctx = getActiveContext();
+    if (ctx) {
+      if (ctx.leagueName) setLeagueName(ctx.leagueName);
+      if (ctx.teamName) setTeamName(ctx.teamName);
+    }
+  }, [location.pathname]); // Re-check on route change
 
   const handleRefresh = async () => {
     if (onRefresh) {

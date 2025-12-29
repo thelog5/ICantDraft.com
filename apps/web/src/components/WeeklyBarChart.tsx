@@ -7,6 +7,8 @@ type WeeklyBarChartProps = {
     opponent: number;
     leagueAvg: number;
     isPercentage?: boolean;
+    rawTeamValue?: number;
+    rawLeagueAvg?: number;
   }>;
 };
 
@@ -16,6 +18,8 @@ type TooltipPayload = {
   color: string;
   payload: {
     isPercentage?: boolean;
+    rawTeamValue?: number;
+    rawLeagueAvg?: number;
   };
 };
 
@@ -25,10 +29,12 @@ type CustomTooltipProps = {
   label?: string;
 };
 
-// Custom tooltip to format percentages
+// Custom tooltip to show raw values
 const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
-    const isPercentage = payload[0]?.payload?.isPercentage ?? false;
+    const dataPoint = payload[0]?.payload;
+    const isPercentage = dataPoint?.isPercentage ?? false;
+    const hasRawValues = dataPoint?.rawTeamValue !== undefined;
     
     return (
       <div style={{
@@ -36,16 +42,26 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
         padding: '10px',
         border: '1px solid #e5e5e5',
         borderRadius: '4px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        pointerEvents: 'none'
       }}>
         <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>{label}</p>
-        {payload.map((entry: TooltipPayload, index: number) => (
-          <p key={index} style={{ margin: '4px 0', color: entry.color, fontSize: '0.875rem' }}>
-            {entry.name}: {isPercentage 
-              ? `${entry.value.toFixed(1)}%` 
-              : entry.value.toFixed(1)}
-          </p>
-        ))}
+        {payload.map((entry: TooltipPayload, index: number) => {
+          let displayValue = entry.value;
+          if (hasRawValues && entry.name === "Your Team" && dataPoint.rawTeamValue !== undefined) {
+            displayValue = dataPoint.rawTeamValue;
+          } else if (hasRawValues && entry.name === "League Avg" && dataPoint.rawLeagueAvg !== undefined) {
+            displayValue = dataPoint.rawLeagueAvg;
+          }
+          
+          return (
+            <p key={index} style={{ margin: '4px 0', color: entry.color, fontSize: '0.875rem' }}>
+              {entry.name}: {isPercentage 
+                ? `${displayValue.toFixed(1)}%` 
+                : displayValue.toFixed(1)}
+            </p>
+          );
+        })}
       </div>
     );
   }
@@ -55,11 +71,26 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
 export default function WeeklyBarChart({ data }: WeeklyBarChartProps) {
   return (
     <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+      <BarChart data={data} margin={{ top: 20, right: 30, left: 50, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
         <XAxis dataKey="category" tick={{ fontSize: 11 }} />
-        <YAxis tick={{ fontSize: 11 }} />
-        <Tooltip content={<CustomTooltip />} />
+        <YAxis 
+          tick={{ fontSize: 11 }} 
+          domain={[0, 100]}
+          label={{ 
+            value: 'Normalized Scale (0-100)', 
+            angle: -90, 
+            position: 'left', 
+            style: { fontSize: '0.75rem', textAnchor: 'middle' },
+            offset: -10
+          }}
+        />
+        <Tooltip 
+          content={<CustomTooltip />} 
+          cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }}
+          animationDuration={0}
+          isAnimationActive={false}
+        />
         <Legend wrapperStyle={{ fontSize: '0.875rem' }} />
         <Bar dataKey="myTeam" fill="#0066cc" name="Your Team" />
         <Bar dataKey="opponent" fill="#999" name="Opponent" />

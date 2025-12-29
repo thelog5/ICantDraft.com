@@ -19,6 +19,13 @@
   letter-spacing: -0.25px;
 }
 
+/* Ensure headings are visible on dark backgrounds */
+.dark-bg .card-title,
+.dark-bg h2,
+.dark-bg h3 {
+  color: #fff;
+}
+
 .card-content {
   color: #333;
   line-height: 1.6;
