@@ -230,6 +230,12 @@ export const api = {
       providerPlayerId: string | null;
       positions: string[];
       headshotUrl: string | null;
+      isIR: boolean;
+      status: string;
+      lineupSlot: string | null;
+      injuryStatus: string;
+      injuryDescription: string | null;
+      estimatedReturnDate: string | null;
       stats: {
         perGame: {
           pts: number;
@@ -263,6 +269,7 @@ export const api = {
           scoringPeriodId: number;
           statSplitTypeId: number | undefined;
         };
+        statsSource: "CURRENT_SEASON" | "ESPN_PROJECTION" | "NONE";
       };
       derived?: {
         roleHint?: string | null;
@@ -275,6 +282,8 @@ export const api = {
   async getWeeklyProjection(leagueId: string, teamId: string): Promise<{
     projectionType: string;
     note?: string;
+    scoringPeriodStartDate: string | null;
+    scoringPeriodEndDate: string | null;
     cats: {
       pts: number;
       reb: number;
@@ -300,6 +309,28 @@ export const api = {
         ftPct: number;
         tov: number;
       };
+      projectedGames: number;
+      projTotals: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        tov: number;
+        fga: number;
+        fgm: number;
+        fta: number;
+        ftm: number;
+        fgPct: number;
+        ftPct: number;
+      };
+      isIR: boolean;
+      status: string;
+      injuryStatus: string;
+      injuryDescription: string | null;
+      estimatedReturnDate: string | null;
+      perGameStatsSource: "CURRENT_SEASON" | "ESPN_PROJECTION" | "NONE";
     }>;
   }> {
     return fetchJson(`${API_BASE_URL}/leagues/${leagueId}/teams/${teamId}/weekly-projection`);

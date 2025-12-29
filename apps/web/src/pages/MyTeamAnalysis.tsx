@@ -14,6 +14,12 @@ type RosterPlayerWithStats = {
   providerPlayerId: string | null;
   positions: string[];
   headshotUrl: string | null;
+  isIR: boolean;
+  status: string;
+  lineupSlot: string | null;
+  injuryStatus: string;
+  injuryDescription: string | null;
+  estimatedReturnDate: string | null;
   stats: {
     perGame: {
       pts: number;
@@ -42,6 +48,12 @@ type RosterPlayerWithStats = {
       fta: number;
       gp: number;
     };
+    source?: {
+      statSourceId: number;
+      scoringPeriodId: number;
+      statSplitTypeId: number | undefined;
+    };
+    statsSource: "CURRENT_SEASON" | "ESPN_PROJECTION" | "NONE";
   };
   derived?: {
     roleHint?: string | null;
@@ -383,6 +395,15 @@ export default function MyTeamAnalysis() {
                             <div className="player-name-wrapper">
                               <div className="player-name-row">
                                 <span className="player-name-cell">{player.fullName}</span>
+                                {/* Injury status pill */}
+                                {(player.injuryStatus === "IR" || player.injuryStatus === "OUT" || player.injuryStatus === "DTD" || player.injuryStatus === "SUSP") && (
+                                  <span 
+                                    className={`player-injury-pill injury-${player.injuryStatus.toLowerCase()}`}
+                                    title={player.injuryDescription || player.injuryStatus}
+                                  >
+                                    {player.injuryStatus}
+                                  </span>
+                                )}
                                 <span 
                                   className={`player-role-pill role-${role.color}`}
                                   title={"hoverText" in role ? role.hoverText || role.reason : role.reason}
@@ -392,6 +413,11 @@ export default function MyTeamAnalysis() {
                               </div>
                               <div className="player-role-reason" title={"hoverText" in role ? role.hoverText || role.reason : role.reason}>
                                 {role.reason}
+                                {player.estimatedReturnDate && (
+                                  <span className="injury-return-date" style={{ marginLeft: "0.5rem", fontSize: "0.75rem", color: "#999" }}>
+                                    (Return: {new Date(player.estimatedReturnDate).toLocaleDateString()})
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>

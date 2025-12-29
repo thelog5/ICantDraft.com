@@ -27,6 +27,7 @@ export type PlayerStatsResult = {
     scoringPeriodId: number;
     statSplitTypeId: number | undefined;
   };
+  statsSource: "CURRENT_SEASON" | "ESPN_PROJECTION" | "NONE";
 };
 
 export type StatsBlockCandidate = {
@@ -36,6 +37,76 @@ export type StatsBlockCandidate = {
   statSplitTypeId: number | undefined;
   score: number; // Higher = better match for season-to-date
 };
+
+/**
+ * Selects ESPN projection stats block (statSourceId !== 0, typically 1)
+ * Used as fallback when current season stats have 0 GP
+ */
+function selectProjectionStatsBlock(blocks: any[], seasonYear: number | null = null): StatsBlockCandidate | null {
+  if (!Array.isArray(blocks) || blocks.length === 0) {
+    return null;
+  }
+
+  const candidates: StatsBlockCandidate[] = [];
+
+  for (const block of blocks) {
+    if (!block || typeof block !== "object") continue;
+
+    const statSourceId = typeof block.statSourceId === "number" ? block.statSourceId : -1;
+    const scoringPeriodId = typeof block.scoringPeriodId === "number" ? block.scoringPeriodId : -1;
+    const statSplitTypeId = typeof block.statSplitTypeId === "number" ? block.statSplitTypeId : undefined;
+    const blockSeasonId = typeof block.seasonId === "number" ? block.seasonId : null;
+
+    // Must be projections (statSourceId !== 0, typically 1)
+    if (statSourceId === 0) continue;
+
+    // Filter by seasonYear if provided
+    if (seasonYear !== null && blockSeasonId !== null && blockSeasonId !== seasonYear) {
+      continue;
+    }
+
+    // Must have stats object
+    if (!block.stats || typeof block.stats !== "object") continue;
+
+    // Score the candidate (higher = better)
+    let score = 0;
+
+    // Prefer scoringPeriodId === 0 (season projections)
+    if (scoringPeriodId === 0) {
+      score += 1000;
+    } else if (scoringPeriodId > 0) {
+      score += Math.max(0, 500 - scoringPeriodId);
+    }
+
+    // Prefer statSplitTypeId === 0 or undefined
+    if (statSplitTypeId === 0 || statSplitTypeId === undefined) {
+      score += 100;
+    } else if (statSplitTypeId >= 1 && statSplitTypeId <= 10) {
+      score -= 50 * statSplitTypeId;
+    }
+
+    candidates.push({
+      block,
+      statSourceId,
+      scoringPeriodId,
+      statSplitTypeId,
+      score,
+    });
+  }
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    return b.scoringPeriodId - a.scoringPeriodId;
+  });
+
+  return candidates[0];
+}
 
 /**
  * Deterministic stats selector for season-to-date per-game numbers.
@@ -222,29 +293,39 @@ export function extractNineCatFromPlayerMeta(meta: any, seasonYear: number | nul
       totals: { ...ZERO, fgm: 0, fga: 0, ftm: 0, fta: 0, gp: 0 },
       perGame: { ...ZERO },
       hasStats: false,
+      statsSource: "NONE",
     };
   }
 
   // Use deterministic selector to find the best season-to-date stats block
   // Filter by seasonYear if provided
-  const selectedCandidate = selectSeasonStatsBlock(blocks, seasonYear);
+  let selectedCandidate = selectSeasonStatsBlock(blocks, seasonYear);
+  let statsSource: "CURRENT_SEASON" | "ESPN_PROJECTION" | "NONE" = "CURRENT_SEASON";
 
+  // If no current season stats found, try to use ESPN projections
   if (!selectedCandidate) {
-    return {
-      totals: { ...ZERO, fgm: 0, fga: 0, ftm: 0, fta: 0, gp: 0 },
-      perGame: { ...ZERO },
-      hasStats: false,
-    };
+    selectedCandidate = selectProjectionStatsBlock(blocks, seasonYear);
+    if (selectedCandidate) {
+      statsSource = "ESPN_PROJECTION";
+    } else {
+      return {
+        totals: { ...ZERO, fgm: 0, fga: 0, ftm: 0, fta: 0, gp: 0 },
+        perGame: { ...ZERO },
+        hasStats: false,
+        statsSource: "NONE",
+      };
+    }
   }
 
-  const selectedBlock = selectedCandidate.block;
-  const st = selectedBlock?.stats;
+  let selectedBlock = selectedCandidate.block;
+  let st = selectedBlock?.stats;
 
   if (!st || typeof st !== "object") {
     return {
       totals: { ...ZERO, fgm: 0, fga: 0, ftm: 0, fta: 0, gp: 0 },
       perGame: { ...ZERO },
       hasStats: false,
+      statsSource: "NONE",
     };
   }
 
@@ -254,24 +335,69 @@ export function extractNineCatFromPlayerMeta(meta: any, seasonYear: number | nul
   };
 
   // ESPN stat key mapping (from analytics.ts)
-  const pts = get("0");
-  const stl = get("1");
-  const blk = get("2");
-  const threes = get("3");
-  const ast = get("4");
-  const reb = get("6");
-  const tov = get("11");
-  const fgm = get("13");
-  const fga = get("14");
-  const ftm = get("15");
-  const fta = get("16");
+  let pts = get("0");
+  let stl = get("1");
+  let blk = get("2");
+  let threes = get("3");
+  let ast = get("4");
+  let reb = get("6");
+  let tov = get("11");
+  let fgm = get("13");
+  let fga = get("14");
+  let ftm = get("15");
+  let fta = get("16");
 
+  // Extract games played using comprehensive method
+  let gp = extractGamesPlayed(selectedBlock, st);
+  
+  // If current season stats have 0 GP, fall back to ESPN projections
+  if (statsSource === "CURRENT_SEASON" && gp === 0) {
+    const projectionCandidate = selectProjectionStatsBlock(blocks, seasonYear);
+    if (projectionCandidate) {
+      // Switch to using projections
+      selectedCandidate = projectionCandidate;
+      statsSource = "ESPN_PROJECTION";
+      selectedBlock = projectionCandidate.block;
+      st = selectedBlock?.stats;
+      
+      if (st && typeof st === "object") {
+        // Re-extract stats from projection block
+        const getProj = (k: string): number => {
+          const v = st[k];
+          return typeof v === "number" && Number.isFinite(v) ? v : 0;
+        };
+        
+        pts = getProj("0");
+        stl = getProj("1");
+        blk = getProj("2");
+        threes = getProj("3");
+        ast = getProj("4");
+        reb = getProj("6");
+        tov = getProj("11");
+        fgm = getProj("13");
+        fga = getProj("14");
+        ftm = getProj("15");
+        fta = getProj("16");
+        
+        // Try to extract GP from projections
+        gp = extractGamesPlayed(selectedBlock, st);
+      }
+    }
+  }
+  
   // Calculate percentages (guard divide-by-zero)
   const fgPct = fga > 0 ? fgm / fga : 0;
   const ftPct = fta > 0 ? ftm / fta : 0;
-
-  // Extract games played using comprehensive method
-  const gp = extractGamesPlayed(selectedBlock, st);
+  
+  // If using projections and GP is still 0, check if projections provide per-game stats directly
+  if (statsSource === "ESPN_PROJECTION" && gp === 0) {
+    const avgStats = selectedBlock?.averageStats;
+    if (avgStats && typeof avgStats === "object") {
+      // If we have per-game projections, we can use them directly
+      // Set GP to 1 so we don't divide by zero, but mark as projection source
+      gp = 1;
+    }
+  }
 
   const totals: PlayerNineCatStats & { fgm: number; fga: number; ftm: number; fta: number; gp: number } = {
     pts,
@@ -290,19 +416,88 @@ export function extractNineCatFromPlayerMeta(meta: any, seasonYear: number | nul
     gp: Math.max(1, gp), // At least 1 to avoid divide-by-zero
   };
 
-  // Calculate per-game averages (totals / games played)
-  // Note: percentages don't need division
-  const perGame: PlayerNineCatStats = {
-    pts: totals.gp > 0 ? pts / totals.gp : 0,
-    reb: totals.gp > 0 ? reb / totals.gp : 0,
-    ast: totals.gp > 0 ? ast / totals.gp : 0,
-    stl: totals.gp > 0 ? stl / totals.gp : 0,
-    blk: totals.gp > 0 ? blk / totals.gp : 0,
-    threes: totals.gp > 0 ? threes / totals.gp : 0,
-    tov: totals.gp > 0 ? tov / totals.gp : 0,
-    fgPct: totals.fgPct, // Percentage doesn't change per-game
-    ftPct: totals.ftPct,
-  };
+  // For projections with 0 GP, check if averageStats has per-game values
+  let perGame: PlayerNineCatStats;
+  if (statsSource === "ESPN_PROJECTION" && gp === 1 && totals.gp === 1) {
+    const avgStats = selectedBlock?.averageStats;
+    if (avgStats && typeof avgStats === "object") {
+      const getAvg = (k: string): number => {
+        const v = avgStats[k];
+        return typeof v === "number" && Number.isFinite(v) ? v : 0;
+      };
+      
+      // Try to get per-game stats directly from averageStats
+      const avgPts = getAvg("0");
+      const avgReb = getAvg("6");
+      const avgAst = getAvg("4");
+      const avgStl = getAvg("1");
+      const avgBlk = getAvg("2");
+      const avgThrees = getAvg("3");
+      const avgTov = getAvg("11");
+      
+      // If we have per-game stats in averageStats, use them
+      if (avgPts > 0 || avgReb > 0 || avgAst > 0) {
+        const avgFgm = getAvg("13");
+        const avgFga = getAvg("14");
+        const avgFtm = getAvg("15");
+        const avgFta = getAvg("16");
+        const avgFgPct = avgFga > 0 ? avgFgm / avgFga : 0;
+        const avgFtPct = avgFta > 0 ? avgFtm / avgFta : 0;
+        
+        perGame = {
+          pts: avgPts,
+          reb: avgReb,
+          ast: avgAst,
+          stl: avgStl,
+          blk: avgBlk,
+          threes: avgThrees,
+          tov: avgTov,
+          fgPct: Math.max(0, Math.min(1, avgFgPct)),
+          ftPct: Math.max(0, Math.min(1, avgFtPct)),
+        };
+      } else {
+        // Fall back to dividing totals by GP
+        perGame = {
+          pts: totals.gp > 0 ? pts / totals.gp : 0,
+          reb: totals.gp > 0 ? reb / totals.gp : 0,
+          ast: totals.gp > 0 ? ast / totals.gp : 0,
+          stl: totals.gp > 0 ? stl / totals.gp : 0,
+          blk: totals.gp > 0 ? blk / totals.gp : 0,
+          threes: totals.gp > 0 ? threes / totals.gp : 0,
+          tov: totals.gp > 0 ? tov / totals.gp : 0,
+          fgPct: totals.fgPct,
+          ftPct: totals.ftPct,
+        };
+      }
+    } else {
+      // No averageStats, divide totals by GP
+      perGame = {
+        pts: totals.gp > 0 ? pts / totals.gp : 0,
+        reb: totals.gp > 0 ? reb / totals.gp : 0,
+        ast: totals.gp > 0 ? ast / totals.gp : 0,
+        stl: totals.gp > 0 ? stl / totals.gp : 0,
+        blk: totals.gp > 0 ? blk / totals.gp : 0,
+        threes: totals.gp > 0 ? threes / totals.gp : 0,
+        tov: totals.gp > 0 ? tov / totals.gp : 0,
+        fgPct: totals.fgPct,
+        ftPct: totals.ftPct,
+      };
+    }
+  } else {
+    // Calculate per-game averages (totals / games played)
+    // Note: percentages don't need division
+    perGame = {
+      pts: totals.gp > 0 ? pts / totals.gp : 0,
+      reb: totals.gp > 0 ? reb / totals.gp : 0,
+      ast: totals.gp > 0 ? ast / totals.gp : 0,
+      stl: totals.gp > 0 ? stl / totals.gp : 0,
+      blk: totals.gp > 0 ? blk / totals.gp : 0,
+      threes: totals.gp > 0 ? threes / totals.gp : 0,
+      tov: totals.gp > 0 ? tov / totals.gp : 0,
+      fgPct: totals.fgPct, // Percentage doesn't change per-game
+      ftPct: totals.ftPct,
+    };
+  }
 
   const hasStats = pts || reb || ast || stl || blk || threes || tov || fga || fta;
 
@@ -315,6 +510,7 @@ export function extractNineCatFromPlayerMeta(meta: any, seasonYear: number | nul
       scoringPeriodId: selectedCandidate.scoringPeriodId,
       statSplitTypeId: selectedCandidate.statSplitTypeId,
     },
+    statsSource,
   };
 }
 

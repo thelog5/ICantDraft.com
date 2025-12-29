@@ -8,7 +8,6 @@ import Card from "../components/Card";
 import CategoryTile from "../components/CategoryTile";
 import TeamRadarChart from "../components/RadarChart";
 import WeeklyBarChart from "../components/WeeklyBarChart";
-import PuntImpactChart from "../components/PuntImpactChart";
 import Skeleton from "../components/Skeleton";
 import ErrorState from "../components/ErrorState";
 import "./Dashboard.css";
@@ -409,36 +408,6 @@ export default function Dashboard() {
     }
   };
 
-  // Punt strategy: worst 2 z-scores
-  const puntCandidates = categoryKeys
-    .map((key) => ({
-      key,
-      zScore: profile.profile.zScores[key],
-      isLowerBetter: key === "tov",
-    }))
-    .sort((a, b) => {
-      if (a.isLowerBetter) return a.zScore - b.zScore;
-      return b.zScore - a.zScore;
-    })
-    .slice(0, 2);
-
-  // Keep focus: best 4 ranks
-  const keepFocus = categoryKeys
-    .map((key) => ({
-      key,
-      rank: profile.profile.categoryRank[key],
-      isLowerBetter: key === "tov",
-    }))
-    .filter((cat) => !cat.isLowerBetter)
-    .sort((a, b) => a.rank - b.rank)
-    .slice(0, 4);
-
-  // Impact chart data
-  const impactData = categoryKeys.slice(0, 4).map((key) => ({
-    category: categoryLabels[key],
-    gain: Math.max(0, profile.profile.zScores[key] * 10),
-    loss: Math.max(0, -profile.profile.zScores[key] * 10),
-  }));
 
   return (
     <TopNav onRefresh={handleRefresh}>
@@ -674,30 +643,13 @@ export default function Dashboard() {
             )}
           </Card>
 
-          {/* Punt Strategy */}
-          <Card className="dashboard-card punt-strategy-card">
-            <h2 className="card-title">Punt Strategy</h2>
-            <div className="punt-strategy-content">
-              <div className="punt-strategy-recommendation">
-                <div className="punt-strategy-label">Recommended Punt:</div>
-                <div className="punt-strategy-categories">
-                  {puntCandidates.map((cat) => (
-                    <span key={cat.key} className="punt-category-badge">
-                      {categoryLabels[cat.key]}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className="punt-strategy-focus">
-                <div className="punt-strategy-label">Keep Focus:</div>
-                <div className="punt-strategy-focus-cats">
-                  {keepFocus.map((cat) => categoryLabels[cat.key]).join(", ")}
-                </div>
-              </div>
-              <div className="punt-impact-chart-container">
-                <h4>Category Impact</h4>
-                <PuntImpactChart data={impactData} />
-              </div>
+          {/* Streaming / Pickups Suggestions */}
+          <Card className="dashboard-card streaming-pickups-card">
+            <h2 className="card-title">Streaming / Pickups Suggestions</h2>
+            <div className="streaming-pickups-content">
+              <p className="streaming-pickups-placeholder">
+                Player recommendations and streaming suggestions will be available here soon.
+              </p>
             </div>
           </Card>
         </div>

@@ -63,12 +63,6 @@ export default function TopNav({ children, onRefresh }: TopNavProps) {
               Weekly Projections
             </Link>
             <Link
-              to="/punt-strategy"
-              className={`topnav-tab ${isActive("/punt-strategy") ? "active" : ""}`}
-            >
-              Punt Strategy
-            </Link>
-            <Link
               to="/team-analysis"
               className={`topnav-tab ${isActive("/team-analysis") ? "active" : ""}`}
             >

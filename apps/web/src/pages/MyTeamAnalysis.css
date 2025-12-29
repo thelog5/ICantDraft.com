@@ -148,6 +148,45 @@
   white-space: nowrap;
 }
 
+.player-injury-pill {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  margin-right: 0.5rem;
+}
+
+.player-injury-pill.injury-ir {
+  background-color: #dc2626;
+  color: #fff;
+}
+
+.player-injury-pill.injury-out {
+  background-color: #dc2626;
+  color: #fff;
+}
+
+.player-injury-pill.injury-dtd {
+  background-color: #f59e0b;
+  color: #fff;
+}
+
+.player-injury-pill.injury-susp {
+  background-color: #6b7280;
+  color: #fff;
+}
+
+.injury-return-date {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  color: #999;
+}
+
 .player-role-pill.role-green {
   background-color: #d4edda;
   color: #155724;

@@ -14,6 +14,7 @@ import {
   type TeamProfile,
 } from "./lib/analytics.js";
 import { extractNineCatFromPlayerMeta, getStatsDebugInfo } from "./lib/playerStats.js";
+import { extractInjuryInfo, calculateProjectedGamesThisWeek, type InjuryInfo } from "./lib/injuryHelpers.js";
 
 // ---------- ENV LOADING ----------
 const __filename = fileURLToPath(import.meta.url);
@@ -347,6 +348,8 @@ app.get("/leagues/:leagueId/teams/:teamId/roster/stats", async (req, res) => {
     const rosterSlots = await prisma.rosterSlot.findMany({
       where: { teamId, endAt: null },
       select: {
+        meta: true,
+        slotLabel: true,
         player: { select: { id: true, fullName: true, providerPlayerId: true, meta: true } },
       },
       orderBy: { createdAt: "asc" },
@@ -356,6 +359,7 @@ app.get("/leagues/:leagueId/teams/:teamId/roster/stats", async (req, res) => {
       const player = slot.player;
       const meta = (player.meta as any) || {};
       const positions = meta.positions || [];
+      const slotMeta = (slot.meta as any) || {};
 
       let headshotUrl: string | null = null;
       if (player.providerPlayerId) {
@@ -368,16 +372,36 @@ app.get("/leagues/:leagueId/teams/:teamId/roster/stats", async (req, res) => {
       // Extract player stats with normalized source metadata, filtered by league seasonYear
       const playerStats = extractNineCatFromPlayerMeta(meta, league.seasonYear);
 
+      // Extract injury info from player meta and lineup slot
+      const lineupSlotId = typeof slotMeta.lineupSlotId === "number" ? slotMeta.lineupSlotId : null;
+      const injuryInfo = extractInjuryInfo(meta, lineupSlotId);
+      
+      // Also check rosterSlot.meta for stored status (from ingestion)
+      const storedStatus = slotMeta.status;
+      const storedIsIR = slotMeta.isIR === true;
+      
+      // Use stored status if available, otherwise use extracted injury info
+      const finalStatus = storedStatus || injuryInfo.status;
+      const isIR = storedIsIR || injuryInfo.status === "IR" || injuryInfo.status === "OUT";
+      const lineupSlot = slotMeta.lineupSlot || slot.slotLabel || null;
+
       return {
         id: player.id,
         fullName: player.fullName,
         providerPlayerId: player.providerPlayerId,
         positions,
         headshotUrl,
+        isIR,
+        status: finalStatus,
+        lineupSlot,
+        injuryStatus: injuryInfo.status,
+        injuryDescription: injuryInfo.description,
+        estimatedReturnDate: injuryInfo.estimatedReturnDate,
         stats: {
           perGame: playerStats.perGame,
           totals: playerStats.totals,
-          source: playerStats.source, // Include source metadata for debugging
+          source: playerStats.source,
+          statsSource: playerStats.statsSource, // CURRENT_SEASON, ESPN_PROJECTION, or NONE
         },
         derived: playerStats.hasStats ? {
           roleHint: null, // Will be computed on frontend
@@ -407,36 +431,92 @@ app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) =
 
     const team = await prisma.team.findFirst({
       where: { id: teamId, leagueId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, meta: true },
     });
     if (!team) return res.status(404).json({ error: "Team not found or not in league" });
 
     const rosterSlots = await prisma.rosterSlot.findMany({
       where: { teamId, endAt: null },
       select: {
+        meta: true,
+        slotLabel: true,
         player: { select: { id: true, fullName: true, meta: true } },
       },
       orderBy: { createdAt: "asc" },
     });
 
-    // Extract per-game stats for all players, filtered by league seasonYear
+    // Get current matchup period from team meta (if available)
+    const teamMeta = (team.meta as any) || {};
+    
+    // Try to get scoring period dates from league/team meta
+    // For now, default to 4 games per week (typical NBA week)
+    // TODO: Extract actual team schedule from ESPN API
+    const defaultGamesPerWeek = 4;
+    const scoringPeriodStartDate = teamMeta.scoringPeriodStartDate || null;
+    const scoringPeriodEndDate = teamMeta.scoringPeriodEndDate || null;
+
+    // Extract per-game stats and calculate projected games for all players
     const playerProjections = rosterSlots.map((slot) => {
       const player = slot.player;
       const meta = (player.meta as any) || {};
+      const slotMeta = (slot.meta as any) || {};
       const playerStats = extractNineCatFromPlayerMeta(meta, league.seasonYear);
+      
+      // Extract injury info using helper function
+      const lineupSlotId = typeof slotMeta.lineupSlotId === "number" ? slotMeta.lineupSlotId : null;
+      const injuryInfo = extractInjuryInfo(meta, lineupSlotId);
+      
+      // Use stored status from slotMeta if available, otherwise use extracted
+      const finalStatus = slotMeta.status || injuryInfo.status;
+      const finalInjuryInfo: InjuryInfo = {
+        status: finalStatus as InjuryInfo["status"],
+        description: injuryInfo.description,
+        estimatedReturnDate: injuryInfo.estimatedReturnDate,
+      };
+      
+      // Calculate projected games using helper function
+      const projectedGames = calculateProjectedGamesThisWeek(
+        defaultGamesPerWeek,
+        finalInjuryInfo,
+        scoringPeriodStartDate || undefined,
+        scoringPeriodEndDate || undefined
+      );
+      
+      // Calculate projected totals = per-game * projected games
+      const projTotals = {
+        pts: playerStats.perGame.pts * projectedGames,
+        reb: playerStats.perGame.reb * projectedGames,
+        ast: playerStats.perGame.ast * projectedGames,
+        stl: playerStats.perGame.stl * projectedGames,
+        blk: playerStats.perGame.blk * projectedGames,
+        threes: playerStats.perGame.threes * projectedGames,
+        tov: playerStats.perGame.tov * projectedGames,
+        // For percentages, we need to track attempts
+        fga: (playerStats.totals.fga / Math.max(1, playerStats.totals.gp)) * projectedGames,
+        fgm: (playerStats.totals.fgm / Math.max(1, playerStats.totals.gp)) * projectedGames,
+        fta: (playerStats.totals.fta / Math.max(1, playerStats.totals.gp)) * projectedGames,
+        ftm: (playerStats.totals.ftm / Math.max(1, playerStats.totals.gp)) * projectedGames,
+        fgPct: playerStats.perGame.fgPct, // Percentage doesn't change
+        ftPct: playerStats.perGame.ftPct,
+      };
       
       return {
         playerId: player.id,
         playerName: player.fullName,
         perGame: playerStats.perGame,
-        gp: playerStats.totals.gp,
+        projectedGames,
+        projTotals,
         hasStats: playerStats.hasStats,
-        totals: playerStats.totals,
+        isIR: finalInjuryInfo.status === "IR" || finalInjuryInfo.status === "OUT",
+        status: finalStatus,
+        injuryStatus: finalInjuryInfo.status,
+        injuryDescription: finalInjuryInfo.description,
+        estimatedReturnDate: finalInjuryInfo.estimatedReturnDate,
+        perGameStatsSource: playerStats.statsSource, // CURRENT_SEASON or ESPN_PROJECTION
       };
     });
 
-    // Sum per-game stats (baseline projection)
-    // This assumes all players play their average per-game stats
+    // Sum projected totals (excluding players with projectedGames=0)
     const cats = {
       pts: 0,
       reb: 0,
@@ -455,25 +535,20 @@ app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) =
     let totalFtm = 0;
 
     for (const proj of playerProjections) {
-      if (proj.hasStats) {
-        cats.pts += proj.perGame.pts;
-        cats.reb += proj.perGame.reb;
-        cats.ast += proj.perGame.ast;
-        cats.stl += proj.perGame.stl;
-        cats.blk += proj.perGame.blk;
-        cats.threes += proj.perGame.threes;
-        cats.tov += proj.perGame.tov;
+      // Only include players with stats and projectedGames > 0
+      if (proj.hasStats && proj.projectedGames > 0) {
+        cats.pts += proj.projTotals.pts;
+        cats.reb += proj.projTotals.reb;
+        cats.ast += proj.projTotals.ast;
+        cats.stl += proj.projTotals.stl;
+        cats.blk += proj.projTotals.blk;
+        cats.threes += proj.projTotals.threes;
+        cats.tov += proj.projTotals.tov;
         
-        // For percentages, we need to track attempts per game
-        const fga = proj.totals.fga / Math.max(1, proj.totals.gp);
-        const fgm = proj.totals.fgm / Math.max(1, proj.totals.gp);
-        const fta = proj.totals.fta / Math.max(1, proj.totals.gp);
-        const ftm = proj.totals.ftm / Math.max(1, proj.totals.gp);
-        
-        totalFga += fga;
-        totalFgm += fgm;
-        totalFta += fta;
-        totalFtm += ftm;
+        totalFga += proj.projTotals.fga;
+        totalFgm += proj.projTotals.fgm;
+        totalFta += proj.projTotals.fta;
+        totalFtm += proj.projTotals.ftm;
       }
     }
 
@@ -482,13 +557,23 @@ app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) =
 
     res.setHeader("Cache-Control", "public, max-age=60");
     return res.json({
-      projectionType: "baseline",
-      note: "Baseline projection using per-game averages. Games remaining not yet available.",
+      projectionType: "projected_games",
+      note: `Projection using per-game averages × projected games played. IR/OUT players excluded. Default: ${defaultGamesPerWeek} games/week.`,
+      scoringPeriodStartDate: scoringPeriodStartDate,
+      scoringPeriodEndDate: scoringPeriodEndDate,
       cats,
       byPlayer: playerProjections.map((p) => ({
         playerId: p.playerId,
         playerName: p.playerName,
         perGame: p.perGame,
+        projectedGames: p.projectedGames,
+        projTotals: p.projTotals,
+        isIR: p.isIR,
+        status: p.status,
+        injuryStatus: p.injuryStatus,
+        injuryDescription: p.injuryDescription,
+        estimatedReturnDate: p.estimatedReturnDate,
+        perGameStatsSource: p.perGameStatsSource,
       })),
     });
   } catch (err) {
@@ -1154,6 +1239,27 @@ app.post("/ingest/espn", async (_req, res) => {
 
       playersUpserted++;
 
+      // Extract lineup slot and injury status
+      const lineupSlotId = typeof e?.lineupSlotId === "number" ? e.lineupSlotId : null;
+      
+      // ESPN lineupSlotId mapping:
+      // 0=PG, 1=SG, 2=SF, 3=PF, 4=C, 5=G, 6=F, 7=UTIL, 20=BE (bench), 21=IL (injured list)
+      const lineupSlotMap: Record<number, string> = {
+        0: "PG", 1: "SG", 2: "SF", 3: "PF", 4: "C",
+        5: "G", 6: "F", 7: "UTIL", 20: "BE", 21: "IL"
+      };
+      const lineupSlot = lineupSlotId !== null && lineupSlotId in lineupSlotMap 
+        ? lineupSlotMap[lineupSlotId] 
+        : lineupSlotId !== null ? String(lineupSlotId) : null;
+      
+      // Extract injury info using helper function
+      const injuryInfo = extractInjuryInfo(p, lineupSlotId);
+      
+      // Determine if player is on IR/IL
+      const isIR = lineupSlotId === 21 || 
+        injuryInfo.status === "IR" || 
+        injuryInfo.status === "OUT";
+
       const existingActive = await prisma.rosterSlot.findFirst({
         where: { leagueId: league.id, teamId: team.id, playerId: player.id, endAt: null },
         select: { id: true },
@@ -1168,11 +1274,40 @@ app.post("/ingest/espn", async (_req, res) => {
             providerRosterSlotId: null,
             startAt: new Date(),
             endAt: null,
-            slotLabel: typeof e?.lineupSlotId === "number" ? String(e.lineupSlotId) : null,
-            meta: { timingSource: "ingestion_time_fallback", source: "espn_lm-api-reads" },
+            slotLabel: lineupSlot,
+            meta: {
+              timingSource: "ingestion_time_fallback",
+              source: "espn_lm-api-reads",
+              lineupSlotId,
+              lineupSlot,
+              injuryStatus: injuryInfo.status,
+              injuryDescription: injuryInfo.description,
+              estimatedReturnDate: injuryInfo.estimatedReturnDate,
+              isIR,
+              status: injuryInfo.status,
+            },
           },
         });
         rosterSlotsCreated++;
+      } else {
+        // Update existing roster slot with latest injury/lineup info
+        await prisma.rosterSlot.update({
+          where: { id: existingActive.id },
+          data: {
+            slotLabel: lineupSlot,
+            meta: {
+              timingSource: "ingestion_time_fallback",
+              source: "espn_lm-api-reads",
+              lineupSlotId,
+              lineupSlot,
+              injuryStatus: injuryInfo.status,
+              injuryDescription: injuryInfo.description,
+              estimatedReturnDate: injuryInfo.estimatedReturnDate,
+              isIR,
+              status: injuryInfo.status,
+            },
+          },
+        });
       }
     }
   }
@@ -1242,7 +1377,10 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
       name: true,
       rosterSlots: {
         where: { endAt: null },
-        select: { player: { select: { id: true, meta: true } } },
+        select: {
+          meta: true,
+          player: { select: { id: true, meta: true } },
+        },
       },
     },
   });
@@ -1250,7 +1388,17 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
   const teamsTotals: TeamTotals[] = [];
 
   for (const t of allTeams) {
-    const playerStats = t.rosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
+    // Filter out IR players from team totals
+    const activeRosterSlots = t.rosterSlots.filter((slot) => {
+      const slotMeta = (slot.meta as any) || {};
+      const isIR = slotMeta.isIR === true || 
+        slotMeta.status === "IR" || 
+        slotMeta.status === "IL" || 
+        slotMeta.status === "OUT";
+      return !isIR;
+    });
+    
+    const playerStats = activeRosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
     const totals = aggregateTeam(playerStats);
     teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
   }
@@ -1267,8 +1415,17 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
   const normalizedTeamScore0to9 = teamScore(zScores);
 
   const targetRoster = allTeams.find((t) => t.id === teamId);
+  // Check stats missing only for active (non-IR) players
+  const activeTargetSlots = targetRoster?.rosterSlots.filter((slot) => {
+    const slotMeta = (slot.meta as any) || {};
+    const isIR = slotMeta.isIR === true || 
+      slotMeta.status === "IR" || 
+      slotMeta.status === "IL" || 
+      slotMeta.status === "OUT";
+    return !isIR;
+  }) || [];
   const statsMissing =
-    targetRoster?.rosterSlots.some((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).missing) ?? false;
+    activeTargetSlots.some((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).missing) ?? false;
 
   const profile: TeamProfile = {
     teamId: team.id,
@@ -1322,12 +1479,27 @@ app.get("/leagues/:leagueId/power-rankings", async (req, res) => {
     select: {
       id: true,
       name: true,
-      rosterSlots: { where: { endAt: null }, select: { player: { select: { meta: true } } } },
+      rosterSlots: { 
+        where: { endAt: null }, 
+        select: { 
+          meta: true,
+          player: { select: { meta: true } } 
+        } 
+      },
     },
   });
 
   const teamTotals: TeamTotals[] = teams.map((t) => {
-    const stats = t.rosterSlots.map((s) => extractPlayerStats(s.player.meta, league.seasonYear).stats);
+    // Filter out IR players from team totals
+    const activeRosterSlots = t.rosterSlots.filter((slot) => {
+      const slotMeta = (slot.meta as any) || {};
+      const isIR = slotMeta.isIR === true || 
+        slotMeta.status === "IR" || 
+        slotMeta.status === "IL" || 
+        slotMeta.status === "OUT";
+      return !isIR;
+    });
+    const stats = activeRosterSlots.map((s) => extractPlayerStats(s.player.meta, league.seasonYear).stats);
     const totals = aggregateTeam(stats);
     return { ...totals, teamId: t.id, teamName: t.name };
   });
@@ -1360,12 +1532,27 @@ app.get("/leagues/:leagueId/overview", async (req, res) => {
     select: {
       id: true,
       name: true,
-      rosterSlots: { where: { endAt: null }, select: { player: { select: { meta: true } } } },
+      rosterSlots: { 
+        where: { endAt: null }, 
+        select: { 
+          meta: true,
+          player: { select: { meta: true } } 
+        } 
+      },
     },
   });
 
   const teamTotals: TeamTotals[] = teams.map((t) => {
-    const stats = t.rosterSlots.map((s) => extractPlayerStats(s.player.meta, league.seasonYear).stats);
+    // Filter out IR players from team totals
+    const activeRosterSlots = t.rosterSlots.filter((slot) => {
+      const slotMeta = (slot.meta as any) || {};
+      const isIR = slotMeta.isIR === true || 
+        slotMeta.status === "IR" || 
+        slotMeta.status === "IL" || 
+        slotMeta.status === "OUT";
+      return !isIR;
+    });
+    const stats = activeRosterSlots.map((s) => extractPlayerStats(s.player.meta, league.seasonYear).stats);
     const totals = aggregateTeam(stats);
     return { ...totals, teamId: t.id, teamName: t.name };
   });

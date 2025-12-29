@@ -498,10 +498,6 @@
   background-color: #0052a3;
 }
 
-.team-analysis-card {
-  grid-column: 1;
-}
-
 .team-analysis-list {
   margin-top: 1rem;
   display: flex;
@@ -636,6 +632,25 @@
   font-style: italic;
 }
 
+.team-analysis-card {
+  grid-column: 1;
+}
+
+.streaming-pickups-card {
+  grid-column: 2;
+}
+
+.streaming-pickups-content {
+  padding: 2rem;
+  text-align: center;
+}
+
+.streaming-pickups-placeholder {
+  color: #666;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
 .punt-strategy-card {
   grid-column: 2;
 }
@@ -716,7 +731,7 @@
   .category-overview-card,
   .team-performance-card,
   .team-analysis-card,
-  .punt-strategy-card {
+  .streaming-pickups-card {
     grid-column: 1;
   }
 
