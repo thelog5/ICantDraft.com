@@ -1343,6 +1343,7 @@ app.post("/ingest/espn", async (_req, res) => {
   let playersUpserted = 0;
   let teamsUpserted = 0;
   let rosterSlotsCreated = 0;
+  let rosterSlotsEnded = 0;
 
   for (const t of teamsRaw) {
     const providerTeamId = String(t?.id);
@@ -1407,8 +1408,53 @@ app.post("/ingest/espn", async (_req, res) => {
 
     teamsUpserted++;
 
-    // roster.entries[].playerPoolEntry.player
+    // Build set of current providerPlayerIds from ESPN response
     const entries: any[] = Array.isArray(t?.roster?.entries) ? t.roster.entries : [];
+    const currentProviderPlayerIds = new Set<string>();
+    for (const e of entries) {
+      const p = e?.playerPoolEntry?.player;
+      if (p?.id) {
+        currentProviderPlayerIds.add(String(p.id));
+      }
+    }
+
+    // End roster slots for players no longer on the team
+    const activeRosterSlots = await prisma.rosterSlot.findMany({
+      where: {
+        leagueId: league.id,
+        teamId: team.id,
+        endAt: null,
+      },
+      include: {
+        player: {
+          select: {
+            providerPlayerId: true,
+          },
+        },
+      },
+    });
+
+    const now = new Date();
+    for (const slot of activeRosterSlots) {
+      const playerProviderId = slot.player.providerPlayerId;
+      if (!currentProviderPlayerIds.has(playerProviderId)) {
+        // Player is no longer on the roster, end the slot
+        const slotMeta = (slot.meta as any) || {};
+        await prisma.rosterSlot.update({
+          where: { id: slot.id },
+          data: {
+            endAt: now,
+            meta: {
+              ...slotMeta,
+              endedBy: "ingest_roster_diff",
+            },
+          },
+        });
+        rosterSlotsEnded++;
+      }
+    }
+
+    // Process current roster players
     for (const e of entries) {
       const p = e?.playerPoolEntry?.player;
       if (!p) continue;
@@ -1525,7 +1571,165 @@ app.post("/ingest/espn", async (_req, res) => {
     teamsUpserted,
     playersUpserted,
     rosterSlotsCreated,
+    rosterSlotsEnded,
   });
+});
+
+// Debug endpoint for roster diff
+app.get("/debug/team/:leagueId/:teamId/roster-diff", async (req, res) => {
+  const { leagueId, teamId } = req.params;
+
+  try {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, name: true, providerLeagueId: true, seasonYear: true },
+    });
+    if (!league) return res.status(404).json({ error: "League not found" });
+
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: {
+        id: true,
+        name: true,
+        providerTeamId: true,
+        leagueId: true,
+      },
+    });
+    if (!team) return res.status(404).json({ error: "Team not found" });
+    if (team.leagueId !== leagueId) {
+      return res.status(400).json({ error: "Team does not belong to this league" });
+    }
+
+    // Get active roster slots from DB
+    const activeRosterSlots = await prisma.rosterSlot.findMany({
+      where: {
+        leagueId: league.id,
+        teamId: team.id,
+        endAt: null,
+      },
+      include: {
+        player: {
+          select: {
+            id: true,
+            providerPlayerId: true,
+            fullName: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    const dbProviderPlayerIds = new Set(
+      activeRosterSlots.map((slot) => slot.player.providerPlayerId)
+    );
+
+    // Try to fetch current ESPN roster
+    let espnProviderPlayerIds = new Set<string>();
+    let espnRosterEntries: Array<{ providerPlayerId: string; fullName: string }> = [];
+    let espnFetchError: string | null = null;
+
+    try {
+      const seasonId = league.seasonYear;
+      const providerLeagueId = league.providerLeagueId;
+      const espn_s2 = process.env.ESPN_S2;
+      const swid = process.env.ESPN_SWID;
+      const baseUrl = process.env.ESPN_BASE_URL ?? "https://lm-api-reads.fantasy.espn.com";
+      const platformVersion = process.env.ESPN_PLATFORM_VERSION;
+
+      if (espn_s2 && swid && platformVersion) {
+        const url = new URL(
+          `${baseUrl}/apis/v3/games/fba/seasons/${seasonId}/segments/0/leagues/${providerLeagueId}`
+        );
+        url.searchParams.append("view", "mRoster");
+        url.searchParams.set("platformVersion", platformVersion);
+
+        const r = await fetch(url.toString(), {
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "Mozilla/5.0",
+            Origin: "https://fantasy.espn.com",
+            Referer: `https://fantasy.espn.com/basketball/league?leagueId=${providerLeagueId}`,
+            Cookie: `espn_s2=${espn_s2.trim()}; SWID=${swid.trim()}; swid=${swid.trim()};`,
+          },
+        });
+
+        if (r.ok) {
+          const data: any = await r.json();
+          const teamsRaw: any[] = Array.isArray(data?.teams) ? data.teams : [];
+          const targetTeam = teamsRaw.find(
+            (t) => String(t?.id) === team.providerTeamId
+          );
+
+          if (targetTeam) {
+            const entries: any[] = Array.isArray(targetTeam?.roster?.entries)
+              ? targetTeam.roster.entries
+              : [];
+            for (const e of entries) {
+              const p = e?.playerPoolEntry?.player;
+              if (p?.id) {
+                const providerPlayerId = String(p.id);
+                espnProviderPlayerIds.add(providerPlayerId);
+                espnRosterEntries.push({
+                  providerPlayerId,
+                  fullName: String(p?.fullName ?? `Player ${providerPlayerId}`),
+                });
+              }
+            }
+          }
+        } else {
+          espnFetchError = `ESPN API returned status ${r.status}`;
+        }
+      } else {
+        espnFetchError = "Missing ESPN credentials in environment";
+      }
+    } catch (err) {
+      espnFetchError = err instanceof Error ? err.message : "Unknown error fetching ESPN data";
+    }
+
+    // Calculate diff
+    const wouldBeEnded = activeRosterSlots
+      .filter((slot) => !espnProviderPlayerIds.has(slot.player.providerPlayerId))
+      .map((slot) => ({
+        rosterSlotId: slot.id,
+        providerPlayerId: slot.player.providerPlayerId,
+        fullName: slot.player.fullName,
+        createdAt: slot.createdAt,
+      }));
+
+    const wouldBeCreated = espnRosterEntries
+      .filter((entry) => !dbProviderPlayerIds.has(entry.providerPlayerId))
+      .map((entry) => ({
+        providerPlayerId: entry.providerPlayerId,
+        fullName: entry.fullName,
+      }));
+
+    return res.json({
+      league: { id: league.id, name: league.name },
+      team: { id: team.id, name: team.name, providerTeamId: team.providerTeamId },
+      espnFetchError,
+      dbActiveRoster: activeRosterSlots.map((slot) => ({
+        rosterSlotId: slot.id,
+        providerPlayerId: slot.player.providerPlayerId,
+        fullName: slot.player.fullName,
+        createdAt: slot.createdAt,
+      })),
+      espnCurrentRoster: espnRosterEntries,
+      diff: {
+        wouldBeEnded,
+        wouldBeCreated,
+        wouldBeEndedCount: wouldBeEnded.length,
+        wouldBeCreatedCount: wouldBeCreated.length,
+      },
+    });
+  } catch (err) {
+    console.error("Error in roster-diff debug endpoint:", err);
+    return res.status(500).json({
+      error: "Failed to compute roster diff",
+      message: err instanceof Error ? err.message : "Unknown error",
+    });
+  }
 });
 
 // Debug endpoint for weekly projections
