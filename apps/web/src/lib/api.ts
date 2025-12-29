@@ -221,6 +221,244 @@ export const api = {
     return fetchJson(`${API_BASE_URL}/leagues/${leagueId}/teams/${teamId}/roster`);
   },
 
+  async getRosterStats(leagueId: string, teamId: string): Promise<{
+    teamId: string;
+    teamName: string;
+    roster: Array<{
+      id: string;
+      fullName: string;
+      providerPlayerId: string | null;
+      positions: string[];
+      headshotUrl: string | null;
+      isIR: boolean;
+      status: string;
+      lineupSlot: string | null;
+      injuryStatus: string;
+      injuryDescription: string | null;
+      estimatedReturnDate: string | null;
+      stats: {
+        perGame: {
+          pts: number;
+          reb: number;
+          ast: number;
+          stl: number;
+          blk: number;
+          threes: number;
+          fgPct: number;
+          ftPct: number;
+          tov: number;
+        };
+        totals: {
+          pts: number;
+          reb: number;
+          ast: number;
+          stl: number;
+          blk: number;
+          threes: number;
+          fgPct: number;
+          ftPct: number;
+          tov: number;
+          fgm: number;
+          fga: number;
+          ftm: number;
+          fta: number;
+          gp: number;
+        };
+        source?: {
+          statSourceId: number;
+          scoringPeriodId: number;
+          statSplitTypeId: number | undefined;
+        };
+        statsSource: "CURRENT_SEASON" | "ESPN_PROJECTION" | "NONE";
+      };
+      derived?: {
+        roleHint?: string | null;
+      };
+    }>;
+  }> {
+    return fetchJson(`${API_BASE_URL}/leagues/${leagueId}/teams/${teamId}/roster/stats`);
+  },
+
+  async getWeeklyProjections(leagueId: string, teamId: string): Promise<{
+    league: { id: string; name: string; seasonYear: number };
+    scoringPeriod: { id: number; startAt: string; endAt: string };
+    leagueAverages: {
+      pts: number;
+      reb: number;
+      ast: number;
+      stl: number;
+      blk: number;
+      threes: number;
+      fgPct: number;
+      ftPct: number;
+      tov: number;
+    };
+    leagueTeamsCount: number;
+    team: {
+      teamId: string;
+      teamName: string;
+      avatarUrl: string | null;
+      projectedTotals: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        fgPct: number;
+        ftPct: number;
+        tov: number;
+      };
+      players: Array<{
+        playerId: string;
+        playerName: string;
+        perGame: {
+          pts: number;
+          reb: number;
+          ast: number;
+          stl: number;
+          blk: number;
+          threes: number;
+          fgPct: number;
+          ftPct: number;
+          tov: number;
+        };
+        projectedGames: number;
+        projTotals: {
+          pts: number;
+          reb: number;
+          ast: number;
+          stl: number;
+          blk: number;
+          threes: number;
+          tov: number;
+          fga: number;
+          fgm: number;
+          fta: number;
+          ftm: number;
+          fgPct: number;
+          ftPct: number;
+        };
+        hasStats: boolean;
+        isIR: boolean;
+        status: string;
+        injuryStatus: string;
+        injuryDescription: string | null;
+        estimatedReturnDate: string | null;
+        perGameStatsSource: "CURRENT_SEASON" | "ESPN_PROJECTION" | "NONE";
+      }>;
+    };
+    opponent: {
+      teamId: string;
+      teamName: string;
+      avatarUrl: string | null;
+      projectedTotals: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        fgPct: number;
+        ftPct: number;
+        tov: number;
+      };
+      players: Array<any>;
+    } | null;
+    matchup: {
+      categories: Array<{
+        key: "pts" | "reb" | "ast" | "stl" | "blk" | "threes" | "fgPct" | "ftPct" | "tov";
+        teamTotal: number;
+        opponentTotal: number;
+        winner: "TEAM" | "OPPONENT" | "TIE";
+      }>;
+      projectedScore: { teamCatsWon: number; opponentCatsWon: number; tied: number };
+      projectedFinalTotals: {
+        team: {
+          pts: number;
+          reb: number;
+          ast: number;
+          stl: number;
+          blk: number;
+          threes: number;
+          fgPct: number;
+          ftPct: number;
+          tov: number;
+        };
+        opponent: {
+          pts: number;
+          reb: number;
+          ast: number;
+          stl: number;
+          blk: number;
+          threes: number;
+          fgPct: number;
+          ftPct: number;
+          tov: number;
+        };
+      };
+    } | null;
+  }> {
+    return fetchJson(`${API_BASE_URL}/leagues/${leagueId}/weekly-projections?teamId=${teamId}`);
+  },
+
+  async getWeeklyProjection(leagueId: string, teamId: string): Promise<{
+    projectionType: string;
+    note?: string;
+    scoringPeriodStartDate: string | null;
+    scoringPeriodEndDate: string | null;
+    cats: {
+      pts: number;
+      reb: number;
+      ast: number;
+      stl: number;
+      blk: number;
+      threes: number;
+      fgPct: number;
+      ftPct: number;
+      tov: number;
+    };
+    byPlayer: Array<{
+      playerId: string;
+      playerName: string;
+      perGame: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        fgPct: number;
+        ftPct: number;
+        tov: number;
+      };
+      projectedGames: number;
+      projTotals: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        tov: number;
+        fga: number;
+        fgm: number;
+        fta: number;
+        ftm: number;
+        fgPct: number;
+        ftPct: number;
+      };
+      isIR: boolean;
+      status: string;
+      injuryStatus: string;
+      injuryDescription: string | null;
+      estimatedReturnDate: string | null;
+      perGameStatsSource: "CURRENT_SEASON" | "ESPN_PROJECTION" | "NONE";
+    }>;
+  }> {
+    return fetchJson(`${API_BASE_URL}/leagues/${leagueId}/teams/${teamId}/weekly-projection`);
+  },
+
   async getTeamHeader(leagueId: string, teamId: string): Promise<{
     league: {
       id: string;

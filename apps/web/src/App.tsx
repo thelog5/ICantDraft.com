@@ -2,7 +2,6 @@ import { Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import WeeklyProjections from "./pages/WeeklyProjections";
-import PuntStrategy from "./pages/PuntStrategy";
 import TradeSuggestions from "./pages/TradeSuggestions";
 import Streaming from "./pages/Streaming";
 import Pickups from "./pages/Pickups";
@@ -15,7 +14,6 @@ function App() {
       <Route path="/" element={<Home />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/weekly-projections" element={<WeeklyProjections />} />
-      <Route path="/punt-strategy" element={<PuntStrategy />} />
       <Route path="/trade-suggestions" element={<TradeSuggestions />} />
       <Route path="/streaming" element={<Streaming />} />
       <Route path="/pickups" element={<Pickups />} />

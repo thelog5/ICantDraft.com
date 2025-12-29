@@ -61,7 +61,8 @@ export type NineCatStats = {
   };
   
   export function extractPlayerStats(
-    playerMeta: any
+    playerMeta: any,
+    seasonYear: number | null = null
   ): { stats: NineCatStats; missing: boolean } {
   
     // ─────────────────────────────────────────────
@@ -128,12 +129,28 @@ export type NineCatStats = {
       return { stats: { ...ZERO_STATS }, missing: true };
     }
   
-    // Season totals
+    // Season totals - filter by seasonYear if provided
     const seasonTotal = blocks.find(
-      (b) =>
-        b?.scoringPeriodId === 0 &&
-        b?.statSourceId === 0 &&
-        (b?.statSplitTypeId === 0 || b?.statSplitTypeId === undefined)
+      (b) => {
+        // Must match basic criteria
+        if (
+          b?.scoringPeriodId !== 0 ||
+          b?.statSourceId !== 0 ||
+          (b?.statSplitTypeId !== 0 && b?.statSplitTypeId !== undefined)
+        ) {
+          return false;
+        }
+        
+        // If seasonYear is provided, filter by seasonId if it exists in the block
+        if (seasonYear !== null) {
+          const blockSeasonId = typeof b?.seasonId === "number" ? b.seasonId : null;
+          if (blockSeasonId !== null && blockSeasonId !== seasonYear) {
+            return false;
+          }
+        }
+        
+        return true;
+      }
     );
   
     const st = seasonTotal?.stats;

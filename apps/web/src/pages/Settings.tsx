@@ -2,14 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import TopNav from "../components/TopNav";
 import { api, ApiError } from "../lib/api";
-import {
-  getLeagueKey,
-  getMyTeamKey,
-  setLeagueKey,
-  setMyTeamKey,
-  setResolvedLeague,
-  setResolvedTeam,
-} from "../lib/settings";
+import { getActiveContext, setActiveContext, ActiveContext } from "../lib/activeContext";
 import Card from "../components/Card";
 import "./Settings.css";
 
@@ -24,10 +17,12 @@ export default function Settings() {
   const redirectMessage = (location.state as any)?.message;
 
   useEffect(() => {
-    const storedLeagueKey = getLeagueKey();
-    const storedTeamKey = getMyTeamKey();
-    if (storedLeagueKey) setLeagueKeyInput(storedLeagueKey);
-    if (storedTeamKey) setTeamKeyInput(storedTeamKey);
+    // Load existing context if available
+    const ctx = getActiveContext();
+    if (ctx) {
+      setLeagueKeyInput(ctx.leagueKeyInput);
+      setTeamKeyInput(ctx.teamKeyInput);
+    }
   }, []);
 
   const handleSave = async () => {
@@ -43,16 +38,21 @@ export default function Settings() {
     try {
       // Resolve league
       const leagueRes = await api.resolveLeague(leagueKeyInput.trim());
-      setResolvedLeague(leagueRes.leagueId, leagueRes.leagueName);
-
+      
       // Resolve team
       const teamRes = await api.resolveTeam(leagueRes.leagueId, teamKeyInput.trim());
-      setResolvedTeam(teamRes.teamId, teamRes.teamName);
 
-      // Store keys
-      setLeagueKey(leagueKeyInput.trim());
-      setMyTeamKey(teamKeyInput.trim());
-
+      // Store active context
+      const ctx: ActiveContext = {
+        leagueKeyInput: leagueKeyInput.trim(),
+        teamKeyInput: teamKeyInput.trim(),
+        leagueId: leagueRes.leagueId,
+        teamId: teamRes.teamId,
+        leagueName: leagueRes.leagueName,
+        teamName: teamRes.teamName,
+      };
+      
+      setActiveContext(ctx);
       setSuccess(true);
 
       setTimeout(() => {

@@ -1,18 +1,10 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import TopNav from "../components/TopNav";
-import { hasSettings } from "../lib/settings";
+import { useActiveContext } from "../hooks/useActiveContext";
 import Card from "../components/Card";
 import "./TradeSuggestions.css";
 
 export default function TradeSuggestions() {
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!hasSettings()) {
-      navigate("/settings");
-    }
-  }, [navigate]);
+  useActiveContext(); // Redirects to settings if no context
 
   return (
     <TopNav>
