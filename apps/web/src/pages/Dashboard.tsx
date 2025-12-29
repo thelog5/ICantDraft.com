@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [allTeams, setAllTeams] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedTeamIndex, setSelectedTeamIndex] = useState(0);
   const [selectedTeamProfile, setSelectedTeamProfile] = useState<TeamProfileResponse | null>(null);
+  const [weeklyProjections, setWeeklyProjections] = useState<Awaited<ReturnType<typeof api.getWeeklyProjections>> | null>(null);
 
   // ALL HOOKS MUST BE CALLED UNCONDITIONALLY AT THE TOP
   // Calculate roster with roles - must be called before any returns
@@ -124,58 +125,123 @@ export default function Dashboard() {
   // Weekly projections data (selected team vs league average) - ALL 9 categories
   // Normalized to 0-100 scale so all categories are visible
   const weeklyData = useMemo(() => {
-    if (!profile) return [];
-    const selectedProfile = selectedTeamProfile || profile;
-    
-    const categoryKeys: Array<keyof typeof profile.profile.categoryRank> = [
+    if (!weeklyProjections) {
+      // Fallback to season totals if no projections
+      if (!profile) return [];
+      const selectedProfile = selectedTeamProfile || profile;
+      
+      const categoryKeys: Array<keyof typeof profile.profile.categoryRank> = [
+        "pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov",
+      ];
+      const categoryLabels: Record<string, string> = {
+        pts: "PTS", reb: "REB", ast: "AST", stl: "STL", blk: "BLK",
+        threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
+      };
+      
+      const countingStats = categoryKeys.filter(k => k !== "fgPct" && k !== "ftPct");
+      const maxTeamValue = Math.max(...countingStats.map(k => selectedProfile.profile.rawTotals[k]));
+      const maxLeagueAvg = Math.max(...countingStats.map(k => profile.leagueAverage[k]));
+      const maxValue = Math.max(maxTeamValue, maxLeagueAvg, 100);
+      
+      return categoryKeys.map((key) => {
+        const teamValue = selectedProfile.profile.rawTotals[key];
+        const leagueAvg = profile.leagueAverage[key];
+        
+        let displayTeamValue: number;
+        let displayLeagueAvg: number;
+        let displayOpponent: number;
+        
+        if (key === "fgPct" || key === "ftPct") {
+          displayTeamValue = teamValue * 100;
+          displayLeagueAvg = leagueAvg * 100;
+          displayOpponent = displayLeagueAvg * 0.95;
+        } else {
+          displayTeamValue = (teamValue / maxValue) * 100;
+          displayLeagueAvg = (leagueAvg / maxValue) * 100;
+          displayOpponent = displayLeagueAvg * 0.95;
+        }
+        
+        return {
+          category: categoryLabels[key],
+          myTeam: displayTeamValue,
+          opponent: displayOpponent,
+          leagueAvg: displayLeagueAvg,
+          isPercentage: key === "fgPct" || key === "ftPct",
+          rawTeamValue: teamValue,
+          rawLeagueAvg: leagueAvg,
+        };
+      });
+    }
+
+    // Use weekly projections data
+    const categoryKeys: Array<keyof typeof weeklyProjections.leagueAverages> = [
       "pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov",
     ];
     const categoryLabels: Record<string, string> = {
       pts: "PTS", reb: "REB", ast: "AST", stl: "STL", blk: "BLK",
       threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
     };
-    
-    // Find max values for normalization (excluding percentages which are already 0-100)
-    const countingStats = categoryKeys.filter(k => k !== "fgPct" && k !== "ftPct");
-    const maxTeamValue = Math.max(...countingStats.map(k => selectedProfile.profile.rawTotals[k]));
-    const maxLeagueAvg = Math.max(...countingStats.map(k => profile.leagueAverage[k]));
-    const maxValue = Math.max(maxTeamValue, maxLeagueAvg, 100); // At least 100 for percentage scale
-    
+
+    // Normalize for chart
+    const countingStats = categoryKeys.filter(k => k !== "fgPct" && k !== "ftPct" && k !== "tov");
+    const maxValue = Math.max(
+      ...countingStats.map(k => weeklyProjections.team.projectedTotals[k]),
+      ...countingStats.map(k => (weeklyProjections.opponent?.projectedTotals[k] || 0)),
+      ...countingStats.map(k => weeklyProjections.leagueAverages[k]),
+      100
+    );
+
     return categoryKeys.map((key) => {
-      const teamValue = selectedProfile.profile.rawTotals[key];
-      // Always use the base profile's league average, not the selected team's values
-      const leagueAvg = profile.leagueAverage[key];
-      
+      const teamValue = weeklyProjections.team.projectedTotals[key];
+      const opponentValue = weeklyProjections.opponent?.projectedTotals[key] || 0;
+      const leagueAvg = weeklyProjections.leagueAverages[key];
+
       let displayTeamValue: number;
+      let displayOpponentValue: number;
       let displayLeagueAvg: number;
-      let displayOpponent: number;
-      
+      let rawTeamValue: number;
+      let rawOpponentValue: number;
+      let rawLeagueAvg: number;
+
       if (key === "fgPct" || key === "ftPct") {
-        // Percentages: already 0-100 scale
         displayTeamValue = teamValue * 100;
+        displayOpponentValue = opponentValue * 100;
         displayLeagueAvg = leagueAvg * 100;
-        displayOpponent = displayLeagueAvg * 0.95;
+        rawTeamValue = teamValue;
+        rawOpponentValue = opponentValue;
+        rawLeagueAvg = leagueAvg;
       } else {
-        // Counting stats: normalize to 0-100 scale
         displayTeamValue = (teamValue / maxValue) * 100;
+        displayOpponentValue = (opponentValue / maxValue) * 100;
         displayLeagueAvg = (leagueAvg / maxValue) * 100;
-        displayOpponent = displayLeagueAvg * 0.95;
+        rawTeamValue = teamValue;
+        rawOpponentValue = opponentValue;
+        rawLeagueAvg = leagueAvg;
       }
-      
+
       return {
         category: categoryLabels[key],
         myTeam: displayTeamValue,
-        opponent: displayOpponent,
+        opponent: displayOpponentValue,
         leagueAvg: displayLeagueAvg,
         isPercentage: key === "fgPct" || key === "ftPct",
-        rawTeamValue: teamValue, // Keep raw for tooltip
-        rawLeagueAvg: leagueAvg, // Keep raw for tooltip - always the actual league average
+        rawTeamValue,
+        rawOpponentValue,
+        rawLeagueAvg,
       };
     });
-  }, [selectedTeamProfile, profile]);
+  }, [weeklyProjections, selectedTeamProfile, profile]);
 
-  // Calculate matchup score for selected team
+  // Calculate matchup score from weekly projections
   const matchupScore = useMemo(() => {
+    if (weeklyProjections?.matchup) {
+      return {
+        wins: weeklyProjections.matchup.projectedScore.teamCatsWon,
+        losses: weeklyProjections.matchup.projectedScore.opponentCatsWon,
+        ties: weeklyProjections.matchup.projectedScore.tied,
+      };
+    }
+    // Fallback to season totals if no matchup
     if (!profile) return { wins: 0, losses: 0, ties: 0 };
     const selectedProfile = selectedTeamProfile || profile;
     
@@ -204,7 +270,7 @@ export default function Dashboard() {
     });
     
     return { wins, losses, ties };
-  }, [selectedTeamProfile, profile]);
+  }, [weeklyProjections, selectedTeamProfile, profile]);
 
   // Calculate categories won vs league average (different from matchup score)
   const leagueAvgComparison = useMemo(() => {
@@ -258,16 +324,18 @@ export default function Dashboard() {
     setError(null);
 
     try {
-      const [profileData, rosterData, rosterStatsData, teamsData] = await Promise.all([
+      const [profileData, rosterData, rosterStatsData, teamsData, weeklyProjectionsData] = await Promise.all([
         api.getTeamProfile(ctx.leagueId, ctx.teamId),
         api.getRoster(ctx.leagueId, ctx.teamId).catch(() => ({ roster: [] })),
         api.getRosterStats(ctx.leagueId, ctx.teamId).catch(() => null),
         api.getTeams(ctx.leagueId).catch(() => ({ teams: [], league: { id: "", name: "" } })),
+        api.getWeeklyProjections(ctx.leagueId, ctx.teamId).catch(() => null),
       ]);
 
       setProfile(profileData);
       setRoster(rosterData.roster || []);
       setRosterStats(rosterStatsData);
+      setWeeklyProjections(weeklyProjectionsData);
       
       // Set up teams list and find initial selected team index
       const teamsList = teamsData.teams || [];
@@ -388,8 +456,12 @@ export default function Dashboard() {
     const selectedTeam = allTeams[newIndex];
     
     try {
-      const teamProfile = await api.getTeamProfile(ctx.leagueId, selectedTeam.id);
+      const [teamProfile, weeklyProj] = await Promise.all([
+        api.getTeamProfile(ctx.leagueId, selectedTeam.id),
+        api.getWeeklyProjections(ctx.leagueId, selectedTeam.id).catch(() => null),
+      ]);
       setSelectedTeamProfile(teamProfile);
+      setWeeklyProjections(weeklyProj);
     } catch (err) {
       console.error("Failed to load team profile:", err);
       // Keep current profile on error
@@ -479,11 +551,28 @@ export default function Dashboard() {
                   &lt;
                 </button>
                 <div className="matchup-teams">
-                  <span className="matchup-team-icon">🏀</span>
+                  {weeklyProjections?.team.avatarUrl ? (
+                    <>
+                      <img 
+                        src={weeklyProjections.team.avatarUrl} 
+                        alt={weeklyProjections.team.teamName} 
+                        className="matchup-team-avatar"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                          const placeholder = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                          if (placeholder) placeholder.style.display = "block";
+                        }}
+                      />
+                      <div className="matchup-team-avatar-placeholder" style={{ display: "none" }}></div>
+                    </>
+                  ) : (
+                    <div className="matchup-team-avatar-placeholder"></div>
+                  )}
                   <span className="matchup-my-team">
-                    {allTeams.length > 0 && selectedTeamIndex >= 0 
+                    {weeklyProjections?.team.teamName || 
+                     (allTeams.length > 0 && selectedTeamIndex >= 0 
                       ? allTeams[selectedTeamIndex]?.name || "Loading..."
-                      : "Your Team"}
+                      : "Your Team")}
                   </span>
                 </div>
                 <button 
@@ -495,18 +584,50 @@ export default function Dashboard() {
                 </button>
               </div>
               <div className="matchup-score-bar">
-                <div className="matchup-score">
-                  {matchupScore.wins}-{matchupScore.losses}
-                  {matchupScore.ties > 0 ? `-${matchupScore.ties}` : ""}
-                </div>
-                <div className="matchup-league-avg">vs. League Avg: {leagueAvgComparison.wins}-{leagueAvgComparison.losses}</div>
+                {weeklyProjections?.opponent ? (
+                  <div className="matchup-opponent-info">
+                    <div className="matchup-opponent-avatar-wrapper">
+                      {weeklyProjections.opponent.avatarUrl ? (
+                        <img 
+                          src={weeklyProjections.opponent.avatarUrl} 
+                          alt={weeklyProjections.opponent.teamName} 
+                          className="matchup-opponent-avatar"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                            const placeholder = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                            if (placeholder) placeholder.style.display = "block";
+                          }}
+                        />
+                      ) : null}
+                      <div className="matchup-opponent-avatar-placeholder" style={{ display: "none" }}></div>
+                    </div>
+                    <div className="matchup-score">
+                      {matchupScore.wins}-{matchupScore.losses}
+                      {matchupScore.ties > 0 ? `-${matchupScore.ties}` : ""}
+                    </div>
+                    <div className="matchup-opponent-name">vs. {weeklyProjections.opponent.teamName}</div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="matchup-score">
+                      {matchupScore.wins}-{matchupScore.losses}
+                      {matchupScore.ties > 0 ? `-${matchupScore.ties}` : ""}
+                    </div>
+                    <div className="matchup-league-avg">vs. League Avg: {leagueAvgComparison.wins}-{leagueAvgComparison.losses}</div>
+                  </>
+                )}
               </div>
             </div>
             <div className="weekly-projections-content">
               <div className="weekly-chart-container">
                 <WeeklyBarChart data={weeklyData} />
                 <div className="weekly-chart-note">
-                  <strong>All 9 categories shown.</strong> FG%/FT% shown as percentages. Data derived from season totals – real weekly projections coming soon.
+                  <strong>All 9 categories shown.</strong> FG%/FT% shown as percentages. {weeklyProjections ? "Real weekly projections based on projected games played." : "Using season totals as fallback."}
+                  {weeklyProjections && (
+                    <a href="/weekly-projections" style={{ marginLeft: "0.5rem", color: "#0066cc" }}>
+                      View full weekly projections →
+                    </a>
+                  )}
                 </div>
               </div>
             </div>

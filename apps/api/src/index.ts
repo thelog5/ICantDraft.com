@@ -15,6 +15,13 @@ import {
 } from "./lib/analytics.js";
 import { extractNineCatFromPlayerMeta, getStatsDebugInfo } from "./lib/playerStats.js";
 import { extractInjuryInfo, calculateProjectedGamesThisWeek, type InjuryInfo } from "./lib/injuryHelpers.js";
+import {
+  calculateTeamWeeklyProjection,
+  calculateMatchupResults,
+  type NineCatTotals,
+  type WeeklyTeamProjection,
+  type NineCatKey,
+} from "./lib/weeklyProjections.js";
 
 // ---------- ENV LOADING ----------
 const __filename = fileURLToPath(import.meta.url);
@@ -417,7 +424,207 @@ app.get("/leagues/:leagueId/teams/:teamId/roster/stats", async (req, res) => {
   }
 });
 
-// Get weekly projection for team
+// Get unified weekly projections with league averages and matchup
+app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const teamId = req.query.teamId as string | undefined;
+
+  if (!teamId) {
+    return res.status(400).json({ error: "teamId query parameter required" });
+  }
+
+  try {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, name: true, seasonYear: true },
+    });
+    if (!league) return res.status(404).json({ error: "League not found" });
+
+    // Get all teams for league averages calculation
+    const allTeams = await prisma.team.findMany({
+      where: { leagueId },
+      select: {
+        id: true,
+        name: true,
+        meta: true,
+        providerTeamId: true,
+        rosterSlots: {
+          where: { endAt: null },
+          select: {
+            meta: true,
+            slotLabel: true,
+            player: { select: { id: true, fullName: true, meta: true } },
+          },
+        },
+      },
+    });
+
+    // Get scoring period info from first team's meta (schedule is stored in team meta during ingestion)
+    const firstTeamMeta = (allTeams[0]?.meta as any) || {};
+    const currentMatchupPeriod = firstTeamMeta.matchup?.matchupPeriodId || 1;
+    // Schedule is stored in league settings or we can get it from team matchups
+    const defaultGamesPerWeek = 4;
+    const scoringPeriodStartDate = firstTeamMeta.scoringPeriodStartDate || null;
+    const scoringPeriodEndDate = firstTeamMeta.scoringPeriodEndDate || null;
+
+    // Calculate projections for ALL teams (for league averages)
+    const teamProjections: Array<{ teamId: string; totals: NineCatTotals; totalsWithAttempts: any }> = [];
+
+    for (const team of allTeams) {
+      const { totals, totalsWithAttempts } = await calculateTeamWeeklyProjection(
+        team.rosterSlots,
+        league.seasonYear,
+        defaultGamesPerWeek,
+        scoringPeriodStartDate || undefined,
+        scoringPeriodEndDate || undefined
+      );
+      teamProjections.push({ teamId: team.id, totals, totalsWithAttempts });
+    }
+
+    // Calculate league averages (MUST be constant regardless of teamId)
+    // Use attempt-weighted approach for percentages
+    const leagueAverages: NineCatTotals = {
+      pts: 0,
+      reb: 0,
+      ast: 0,
+      stl: 0,
+      blk: 0,
+      threes: 0,
+      tov: 0,
+      fgPct: 0,
+      ftPct: 0,
+    };
+
+    let totalFga = 0;
+    let totalFgm = 0;
+    let totalFta = 0;
+    let totalFtm = 0;
+
+    for (const proj of teamProjections) {
+      leagueAverages.pts += proj.totals.pts;
+      leagueAverages.reb += proj.totals.reb;
+      leagueAverages.ast += proj.totals.ast;
+      leagueAverages.stl += proj.totals.stl;
+      leagueAverages.blk += proj.totals.blk;
+      leagueAverages.threes += proj.totals.threes;
+      leagueAverages.tov += proj.totals.tov;
+
+      // Use actual attempts from totalsWithAttempts
+      totalFga += proj.totalsWithAttempts.fga || 0;
+      totalFgm += proj.totalsWithAttempts.fgm || 0;
+      totalFta += proj.totalsWithAttempts.fta || 0;
+      totalFtm += proj.totalsWithAttempts.ftm || 0;
+    }
+
+    const teamCount = teamProjections.length;
+    if (teamCount > 0) {
+      leagueAverages.pts /= teamCount;
+      leagueAverages.reb /= teamCount;
+      leagueAverages.ast /= teamCount;
+      leagueAverages.stl /= teamCount;
+      leagueAverages.blk /= teamCount;
+      leagueAverages.threes /= teamCount;
+      leagueAverages.tov /= teamCount;
+      // Attempt-weighted percentages
+      leagueAverages.fgPct = totalFga > 0 ? totalFgm / totalFga : 0;
+      leagueAverages.ftPct = totalFta > 0 ? totalFtm / totalFta : 0;
+    }
+
+    // Get the selected team
+    const selectedTeam = allTeams.find((t) => t.id === teamId);
+    if (!selectedTeam) {
+      return res.status(404).json({ error: "Team not found" });
+    }
+
+    // Calculate selected team's projection
+    const { totals: teamTotals, players: teamPlayers } = await calculateTeamWeeklyProjection(
+      selectedTeam.rosterSlots,
+      league.seasonYear,
+      defaultGamesPerWeek,
+      scoringPeriodStartDate || undefined,
+      scoringPeriodEndDate || undefined
+    );
+
+    // Get team avatar
+    const teamAvatarUrl = await getTeamAvatarUrl(req, selectedTeam.id);
+
+    const teamProjection: WeeklyTeamProjection = {
+      teamId: selectedTeam.id,
+      teamName: selectedTeam.name,
+      avatarUrl: teamAvatarUrl,
+      projectedTotals: teamTotals,
+      players: teamPlayers,
+    };
+
+    // Find opponent from schedule
+    const teamMeta = (selectedTeam.meta as any) || {};
+    const matchupData = teamMeta.matchup || null;
+    let opponentProjection: WeeklyTeamProjection | null = null;
+    let matchupResults: ReturnType<typeof calculateMatchupResults> | null = null;
+
+    if (matchupData && matchupData.opponentTeamId) {
+      // Find opponent team by providerTeamId (it's a direct field, not in meta)
+      const opponentProviderId = String(matchupData.opponentTeamId);
+      const opponent = allTeams.find(
+        (t) => t.providerTeamId === opponentProviderId
+      );
+
+      if (opponent) {
+        // Calculate opponent's projection
+        const { totals: opponentTotals, players: opponentPlayers } = await calculateTeamWeeklyProjection(
+          opponent.rosterSlots,
+          league.seasonYear,
+          defaultGamesPerWeek,
+          scoringPeriodStartDate || undefined,
+          scoringPeriodEndDate || undefined
+        );
+
+        const opponentAvatarUrl = await getTeamAvatarUrl(req, opponent.id);
+
+        opponentProjection = {
+          teamId: opponent.id,
+          teamName: opponent.name,
+          avatarUrl: opponentAvatarUrl,
+          projectedTotals: opponentTotals,
+          players: opponentPlayers,
+        };
+
+        // Calculate matchup results
+        matchupResults = calculateMatchupResults(teamTotals, opponentTotals);
+      } else {
+        console.warn(`Opponent not found: providerTeamId=${opponentProviderId}. Available teams:`, 
+          allTeams.map(t => ({ id: t.id, name: t.name, providerTeamId: t.providerTeamId }))
+        );
+      }
+    } else {
+      console.warn(`No matchup data found for team ${selectedTeam.id}. Team meta:`, teamMeta);
+    }
+
+    res.setHeader("Cache-Control", "public, max-age=60");
+    return res.json({
+      league: {
+        id: league.id,
+        name: league.name,
+        seasonYear: league.seasonYear,
+      },
+      scoringPeriod: {
+        id: currentMatchupPeriod,
+        startAt: scoringPeriodStartDate || new Date().toISOString(),
+        endAt: scoringPeriodEndDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+      leagueAverages,
+      leagueTeamsCount: teamCount,
+      team: teamProjection,
+      opponent: opponentProjection,
+      matchup: matchupResults,
+    });
+  } catch (err) {
+    console.error("Error fetching weekly projections:", err);
+    return res.status(500).json({ error: "Failed to fetch weekly projections" });
+  }
+});
+
+// Get weekly projection for team (legacy endpoint - keep for backward compatibility)
 app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) => {
   const leagueId = req.params.leagueId;
   const teamId = req.params.teamId;
@@ -1319,6 +1526,72 @@ app.post("/ingest/espn", async (_req, res) => {
     playersUpserted,
     rosterSlotsCreated,
   });
+});
+
+// Debug endpoint for weekly projections
+app.get("/debug/weekly-projections/:leagueId", async (req, res) => {
+  const leagueId = req.params.leagueId;
+
+  try {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, name: true },
+    });
+    if (!league) return res.status(404).json({ error: "League not found" });
+
+    const allTeams = await prisma.team.findMany({
+      where: { leagueId },
+      select: {
+        id: true,
+        name: true,
+        providerTeamId: true,
+        meta: true,
+      },
+    });
+
+    // Extract matchup mappings
+    const matchupMappings: Array<{ teamId: string; teamName: string; opponentTeamId: string | null; opponentTeamName: string | null }> = [];
+
+    for (const team of allTeams) {
+      const teamMeta = (team.meta as any) || {};
+      const matchupData = teamMeta.matchup || null;
+      const opponentProviderId = matchupData?.opponentTeamId ? String(matchupData.opponentTeamId) : null;
+
+      let opponentTeamName: string | null = null;
+      if (opponentProviderId) {
+        const opponent = allTeams.find((t) => t.providerTeamId === opponentProviderId);
+        opponentTeamName = opponent?.name || null;
+      }
+
+      matchupMappings.push({
+        teamId: team.id,
+        teamName: team.name,
+        opponentTeamId: opponentProviderId,
+        opponentTeamName,
+      });
+    }
+
+    // Get scoring period info
+    const firstTeamMeta = (allTeams[0]?.meta as any) || {};
+    const currentMatchupPeriod = firstTeamMeta.matchup?.matchupPeriodId || 1;
+    const scoringPeriodStartDate = firstTeamMeta.scoringPeriodStartDate || null;
+    const scoringPeriodEndDate = firstTeamMeta.scoringPeriodEndDate || null;
+
+    return res.json({
+      league: { id: league.id, name: league.name },
+      scoringPeriod: {
+        id: currentMatchupPeriod,
+        startAt: scoringPeriodStartDate,
+        endAt: scoringPeriodEndDate,
+      },
+      matchupMappings,
+      teamsCount: allTeams.length,
+      teamsWithOpponents: matchupMappings.filter((m) => m.opponentTeamId !== null).length,
+    });
+  } catch (err) {
+    console.error("Error in debug endpoint:", err);
+    return res.status(500).json({ error: "Failed to fetch debug info" });
+  }
 });
 
 // Helper: List teams in a league

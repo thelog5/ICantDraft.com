@@ -34,10 +34,8 @@ export default function HomeHeader({ leagueId, myTeamId }: HomeHeaderProps) {
   const [loading, setLoading] = useState(true);
   const [standings, setStandings] = useState<StandingsData | null>(null);
   const [matchup, setMatchup] = useState<MatchupData | null>(null);
-  const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
-    setAvatarError(false); // Reset avatar error when team changes
     loadData();
   }, [leagueId, myTeamId]);
 
@@ -86,11 +84,8 @@ export default function HomeHeader({ leagueId, myTeamId }: HomeHeaderProps) {
       }`
     : null;
 
-  // Get team avatar and proxy it through backend to bypass CORS
+  // Get team avatar (use directly like WeeklyProjections)
   const teamAvatarUrl = matchup?.team?.avatarUrl || null;
-  const proxiedAvatarUrl = teamAvatarUrl 
-    ? `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/proxy/image?url=${encodeURIComponent(teamAvatarUrl)}`
-    : null;
   
   const teamInitials = myTeamName
     .split(" ")
@@ -109,13 +104,22 @@ export default function HomeHeader({ leagueId, myTeamId }: HomeHeaderProps) {
     <div className="home-header">
       <div className="home-header-left">
         <div className="home-header-avatar">
-          {proxiedAvatarUrl && !avatarError ? (
-            <img
-              src={proxiedAvatarUrl}
-              alt={myTeamName}
-              className="home-header-avatar-img"
-              onError={() => setAvatarError(true)}
-            />
+          {teamAvatarUrl ? (
+            <>
+              <img
+                src={teamAvatarUrl}
+                alt={myTeamName}
+                className="home-header-avatar-img"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                  const placeholder = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                  if (placeholder) placeholder.style.display = "flex";
+                }}
+              />
+              <div className="home-header-avatar-fallback" style={{ display: "none" }}>
+                {teamInitials}
+              </div>
+            </>
           ) : (
             <div className="home-header-avatar-fallback">
               {teamInitials}
@@ -146,21 +150,26 @@ export default function HomeHeader({ leagueId, myTeamId }: HomeHeaderProps) {
               <div className="matchup-row">
                 <div className="matchup-avatar-wrapper">
                   {matchup.opponent.avatarUrl ? (
-                    <img
-                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/proxy/image?url=${encodeURIComponent(matchup.opponent.avatarUrl)}`}
-                      alt={matchup.opponent.teamName}
-                      className="matchup-avatar"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = "none";
-                        const fallback = target.nextElementSibling as HTMLElement;
-                        if (fallback) fallback.style.display = "flex";
-                      }}
-                    />
-                  ) : null}
-                  <div className="matchup-avatar-fallback" style={{ display: matchup.opponent.avatarUrl ? "none" : "flex" }}>
-                    {matchup.opponent.teamName.substring(0, 2).toUpperCase()}
-                  </div>
+                    <>
+                      <img
+                        src={matchup.opponent.avatarUrl}
+                        alt={matchup.opponent.teamName}
+                        className="matchup-avatar"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                          const fallback = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = "flex";
+                        }}
+                      />
+                      <div className="matchup-avatar-fallback" style={{ display: "none" }}>
+                        {matchup.opponent.teamName.substring(0, 2).toUpperCase()}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="matchup-avatar-fallback">
+                      {matchup.opponent.teamName.substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
                 </div>
                 <div className="matchup-name">{matchup.opponent.teamName}</div>
                 <div className="matchup-score-value">{matchup.score.opponent}</div>
@@ -168,17 +177,27 @@ export default function HomeHeader({ leagueId, myTeamId }: HomeHeaderProps) {
               {/* My Team Row */}
               <div className="matchup-row my-team-row">
                 <div className="matchup-avatar-wrapper">
-                  {proxiedAvatarUrl && !avatarError ? (
-                    <img
-                      src={proxiedAvatarUrl}
-                      alt={myTeamName}
-                      className="matchup-avatar"
-                      onError={() => setAvatarError(true)}
-                    />
-                  ) : null}
-                  <div className="matchup-avatar-fallback" style={{ display: (proxiedAvatarUrl && !avatarError) ? "none" : "flex" }}>
-                    {teamInitials}
-                  </div>
+                  {teamAvatarUrl ? (
+                    <>
+                      <img
+                        src={teamAvatarUrl}
+                        alt={myTeamName}
+                        className="matchup-avatar"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                          const fallback = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = "flex";
+                        }}
+                      />
+                      <div className="matchup-avatar-fallback" style={{ display: "none" }}>
+                        {teamInitials}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="matchup-avatar-fallback">
+                      {teamInitials}
+                    </div>
+                  )}
                 </div>
                 <div className="matchup-name">{myTeamName}</div>
                 <div className="matchup-score-value my-score-value">{matchup.score.team}</div>
