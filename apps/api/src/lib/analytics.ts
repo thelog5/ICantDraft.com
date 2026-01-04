@@ -243,8 +243,8 @@ export type NineCatStats = {
       tov,
       fgPct,
       ftPct,
-      ...(fgAtt > 0 ? { fgAttempts: fgAtt } : {}),
-      ...(ftAtt > 0 ? { ftAttempts: ftAtt } : {}),
+      fgAttempts: fgAtt,
+      ftAttempts: ftAtt,
     };
   }
   
