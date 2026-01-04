@@ -8,6 +8,7 @@ type WeeklyBarChartProps = {
     leagueAvg: number;
     isPercentage?: boolean;
     rawTeamValue?: number;
+    rawOpponentValue?: number;
     rawLeagueAvg?: number;
   }>;
 };
@@ -19,6 +20,7 @@ type TooltipPayload = {
   payload: {
     isPercentage?: boolean;
     rawTeamValue?: number;
+    rawOpponentValue?: number;
     rawLeagueAvg?: number;
   };
 };
@@ -34,30 +36,33 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     const dataPoint = payload[0]?.payload;
     const isPercentage = dataPoint?.isPercentage ?? false;
-    const hasRawValues = dataPoint?.rawTeamValue !== undefined;
     
     return (
       <div style={{
         backgroundColor: '#fff',
-        padding: '10px',
+        padding: '12px 14px',
         border: '1px solid #e5e5e5',
-        borderRadius: '4px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        borderRadius: '6px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
         pointerEvents: 'none'
       }}>
-        <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>{label}</p>
+        <p style={{ margin: '0 0 10px 0', fontWeight: 700, fontSize: '1rem' }}>{label}</p>
         {payload.map((entry: TooltipPayload, index: number) => {
           let displayValue = entry.value;
-          if (hasRawValues && entry.name === "Your Team" && dataPoint.rawTeamValue !== undefined) {
+          
+          // Get the correct raw value based on the entry name
+          if (entry.name === "Your Team" && dataPoint.rawTeamValue !== undefined) {
             displayValue = dataPoint.rawTeamValue;
-          } else if (hasRawValues && entry.name === "League Avg" && dataPoint.rawLeagueAvg !== undefined) {
+          } else if (entry.name === "Opponent" && dataPoint.rawOpponentValue !== undefined) {
+            displayValue = dataPoint.rawOpponentValue;
+          } else if (entry.name === "League Avg" && dataPoint.rawLeagueAvg !== undefined) {
             displayValue = dataPoint.rawLeagueAvg;
           }
           
           return (
-            <p key={index} style={{ margin: '4px 0', color: entry.color, fontSize: '0.875rem' }}>
+            <p key={index} style={{ margin: '5px 0', color: entry.color, fontSize: '1rem', fontWeight: 600 }}>
               {entry.name}: {isPercentage 
-                ? `${displayValue.toFixed(1)}%` 
+                ? `${(displayValue * 100).toFixed(1)}%` 
                 : displayValue.toFixed(1)}
             </p>
           );
