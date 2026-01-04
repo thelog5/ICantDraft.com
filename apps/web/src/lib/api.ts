@@ -531,4 +531,127 @@ export const api = {
   }> {
     return fetchJson(`${API_BASE_URL}/leagues/${leagueId}/matchup/current?teamId=${teamId}`);
   },
+
+  async getTradeSuggestions(
+    leagueId: string,
+    teamId: string,
+    options?: {
+      tradeSize?: "1for1" | "2for1" | "2for2";
+      excludeUntouchables?: boolean;
+      minOppGrade?: string;
+      minProbability?: number;
+      showQuestionable?: boolean;
+      untouchables?: string[];
+    }
+  ): Promise<{
+    ok: boolean;
+    myTeam: {
+      id: string;
+      name: string;
+      avatarUrl: string | null;
+    };
+    suggestions: Array<{
+      id: string;
+      partnerTeam: {
+        id: string;
+        name: string;
+        avatarUrl: string | null;
+      };
+      trade: {
+        send: Array<{
+          playerId: string;
+          name: string;
+          headshotUrl: string | null;
+          status: string;
+        }>;
+        receive: Array<{
+          playerId: string;
+          name: string;
+          headshotUrl: string | null;
+          status: string;
+        }>;
+        type: "1for1" | "2for2";
+      };
+      impact: {
+        my: {
+          teamScoreBefore: number;
+          teamScoreAfter: number;
+          teamScoreDelta: number;
+          avgPlacementBefore: number;
+          avgPlacementAfter: number;
+          avgPlacementDelta: number;
+          categoryPercentilesBefore: Record<string, number>;
+          categoryPercentilesAfter: Record<string, number>;
+          categoryPercentilesDelta: Record<string, number>;
+          categoryDetails: Array<{
+            category: string;
+            totalBefore: number;
+            totalAfter: number;
+            rankBefore: number;
+            rankAfter: number;
+            rankDelta: number;
+          }>;
+          grade: string;
+          probability: number;
+          confidence: number;
+        };
+        opp: {
+          teamScoreBefore: number;
+          teamScoreAfter: number;
+          teamScoreDelta: number;
+          avgPlacementBefore: number;
+          avgPlacementAfter: number;
+          avgPlacementDelta: number;
+          categoryPercentilesBefore: Record<string, number>;
+          categoryPercentilesAfter: Record<string, number>;
+          categoryPercentilesDelta: Record<string, number>;
+          categoryDetails: Array<{
+            category: string;
+            totalBefore: number;
+            totalAfter: number;
+            rankBefore: number;
+            rankAfter: number;
+            rankDelta: number;
+          }>;
+          grade: string;
+          probability: number;
+          confidence: number;
+        };
+      };
+      summary: {
+        myTopGains: Array<{ category: string; delta: number }>;
+        myTopLosses: Array<{ category: string; delta: number }>;
+        oppTopGains: Array<{ category: string; delta: number }>;
+        oppTopLosses: Array<{ category: string; delta: number }>;
+      };
+      rationaleBullets: string[];
+    }>;
+    leagueTeamsCount?: number;
+    reason?: string;
+    warning?: string;
+    debug?: {
+      rostersLoaded: { my: number; otherTeams: number; otherPlayersTotal: number };
+      candidatesGenerated: number;
+      afterUntouchables: number;
+      afterFairness: number;
+      afterBothBenefit: number;
+      afterQualityFilters: number;
+      afterAutoRelaxation: number;
+      final: number;
+    };
+  }> {
+    const params = new URLSearchParams();
+    if (options?.tradeSize) params.set("tradeSize", options.tradeSize);
+    if (options?.excludeUntouchables === false) params.set("excludeUntouchables", "false");
+    if (options?.minOppGrade) params.set("minOppGrade", options.minOppGrade);
+    // minProbability removed - probability is now for ranking only, not filtering
+    if (options?.showQuestionable) params.set("showQuestionable", "true");
+    if (options?.untouchables && options.untouchables.length > 0) {
+      options.untouchables.forEach((id) => params.append("untouchables", id));
+    }
+    const query = params.toString();
+    return fetchJson(
+      `${API_BASE_URL}/leagues/${leagueId}/teams/${teamId}/trade-suggestions${query ? `?${query}` : ""}`
+    );
+  },
 };

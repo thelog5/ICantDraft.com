@@ -22,6 +22,30 @@ import {
   type WeeklyTeamProjection,
   type NineCatKey,
 } from "./lib/weeklyProjections.js";
+import {
+  computePlayerValue,
+  calculatePTVPercentiles,
+  identifyFocusCategories,
+  identifyUntouchables,
+  generate1For1Trades,
+  generate2For1Trades,
+  generate2For2Trades,
+  analyzeTrade,
+  scoreTrade,
+  generateRationale,
+  calculateAvgPlacement,
+  calculateCategoryPercentiles,
+  calculateTradeGrade,
+  calculateProbability,
+  calculateConfidence,
+  gradeToScore as gradeToScoreFn,
+  type PlayerValue,
+  type TradeCandidate,
+  type TradeSuggestion,
+  type TradeAnalysis,
+  type CategoryDetail,
+  type NineCategory as CategoryKey,
+} from "./lib/tradeEngine.js";
 
 // ---------- ENV LOADING ----------
 const __filename = fileURLToPath(import.meta.url);
@@ -2046,6 +2070,906 @@ app.get("/leagues/:leagueId/overview", async (req, res) => {
 
   return res.status(200).json({ league, leagueAverage: dist.mean, powerRankings });
 });
+
+// Trade suggestions
+app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const teamId = req.params.teamId;
+  const tradeSize = req.query.tradeSize as string | undefined; // "1for1" | "2for2" | undefined (both)
+  const excludeUntouchables = req.query.excludeUntouchables !== "false"; // Default true
+  const showQuestionable = req.query.showQuestionable === "true";
+  const untouchablePlayerIds = req.query.untouchables 
+    ? (Array.isArray(req.query.untouchables) ? req.query.untouchables : [req.query.untouchables]).map(String)
+    : [];
+
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { id: true, name: true, seasonYear: true },
+  });
+  if (!league) return res.status(404).json({ error: "League not found" });
+
+  // Get scoring period info (for weekly projections)
+  const myTeamMeta = await prisma.team.findFirst({
+    where: { id: teamId, leagueId },
+    select: { meta: true },
+  });
+  const teamMeta = (myTeamMeta?.meta as any) || {};
+  const defaultGamesPerWeek = 4;
+  const scoringPeriodStartDate = teamMeta.scoringPeriodStartDate || undefined;
+  const scoringPeriodEndDate = teamMeta.scoringPeriodEndDate || undefined;
+
+  const myTeam = await prisma.team.findFirst({
+    where: { id: teamId, leagueId },
+    select: {
+      id: true,
+      name: true,
+      rosterSlots: {
+        where: { endAt: null },
+        select: {
+          meta: true,
+          player: {
+            select: {
+              id: true,
+              fullName: true,
+              meta: true,
+              providerPlayerId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!myTeam) return res.status(404).json({ error: "Team not found or not in league" });
+
+  const allTeams = await prisma.team.findMany({
+    where: { leagueId },
+    select: {
+      id: true,
+      name: true,
+      rosterSlots: {
+        where: { endAt: null },
+        select: {
+          meta: true,
+          player: {
+            select: {
+              id: true,
+              fullName: true,
+              meta: true,
+              providerPlayerId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // Compute team totals for all teams (for league distribution)
+  const teamsTotals: TeamTotals[] = [];
+  for (const t of allTeams) {
+    const activeRosterSlots = t.rosterSlots.filter((slot) => {
+      const slotMeta = (slot.meta as any) || {};
+      const isIR = slotMeta.isIR === true || 
+        slotMeta.status === "IR" || 
+        slotMeta.status === "IL" || 
+        slotMeta.status === "OUT";
+      return !isIR;
+    });
+    
+    const playerStats = activeRosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
+    const totals = aggregateTeam(playerStats);
+    teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
+  }
+
+  if (teamsTotals.length === 0) return res.status(400).json({ error: "No teams with active rosters found" });
+
+  const leagueDist = computeLeagueDistributions(teamsTotals);
+  const ranksMap = rankTeams(teamsTotals);
+
+  const myTeamTotals = teamsTotals.find((t) => t.teamId === teamId);
+  if (!myTeamTotals) return res.status(500).json({ error: "My team totals not found" });
+
+  const myZ = zScore(myTeamTotals, leagueDist);
+  const myRanks = ranksMap.get(teamId) ?? { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, threes: 0, fgPct: 0, ftPct: 0, tov: 0 };
+
+  // Identify focus categories
+  const { weaknesses: myWeaknesses, strengths: myStrengths } = identifyFocusCategories(myZ);
+
+  // Compute player values for ALL teams first (needed for PTV percentiles)
+  const allPlayersList: PlayerValue[] = [];
+  const teamPlayersMap = new Map<string, PlayerValue[]>();
+  
+  // My team players
+  const myPlayers: PlayerValue[] = [];
+  for (const slot of myTeam.rosterSlots) {
+    const slotMeta = (slot.meta as any) || {};
+    const headshotUrl = slot.player.providerPlayerId
+      ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${slot.player.providerPlayerId}.png`)
+      : null;
+    const playerValue = computePlayerValue(
+      {
+        id: slot.player.id,
+        fullName: slot.player.fullName,
+        meta: slot.player.meta,
+        headshotUrl,
+      },
+      leagueDist,
+      league.seasonYear,
+      slotMeta
+    );
+    if (playerValue) {
+      myPlayers.push(playerValue);
+      allPlayersList.push(playerValue);
+    }
+  }
+  teamPlayersMap.set(teamId, myPlayers);
+
+  // Collect all opponent team players
+  for (const opponentTeam of allTeams) {
+    if (opponentTeam.id === teamId) continue; // Skip self
+
+    const theirTeamTotals = teamsTotals.find((t) => t.teamId === opponentTeam.id);
+    if (!theirTeamTotals) continue;
+
+    const theirPlayers: PlayerValue[] = [];
+    for (const slot of opponentTeam.rosterSlots) {
+      const slotMeta = (slot.meta as any) || {};
+      const headshotUrl = slot.player.providerPlayerId
+        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${slot.player.providerPlayerId}.png`)
+        : null;
+      const playerValue = computePlayerValue(
+        {
+          id: slot.player.id,
+          fullName: slot.player.fullName,
+          meta: slot.player.meta,
+          headshotUrl,
+        },
+        leagueDist,
+        league.seasonYear,
+        slotMeta
+      );
+      if (playerValue) {
+        theirPlayers.push(playerValue);
+        allPlayersList.push(playerValue);
+      }
+    }
+    teamPlayersMap.set(opponentTeam.id, theirPlayers);
+  }
+
+  // Calculate PTV percentiles for ALL players at once
+  calculatePTVPercentiles(allPlayersList);
+
+  // Build untouchables set from request + core players
+  const myUntouchables = new Set<string>();
+  if (excludeUntouchables) {
+    // Add user-specified untouchables
+    untouchablePlayerIds.forEach((id) => myUntouchables.add(id));
+    // Add core players (top 2 by PTV or top 10 percentile)
+    myPlayers.forEach((p) => {
+      if (p.isCore) {
+        myUntouchables.add(p.playerId);
+      }
+    });
+  }
+
+  // Generate trade suggestions for each opponent team
+  const allSuggestions: TradeSuggestion[] = [];
+  let globalPassWarning: string | null = null;
+  
+  // Debug counters (aggregated across all opponents)
+  const debug = {
+    rostersLoaded: {
+      my: myPlayers.length,
+      otherTeams: allTeams.length - 1,
+      otherPlayersTotal: 0,
+    },
+    candidatesGenerated: 0,
+    afterEligibility: 0,
+    afterNoUntouchables: 0,
+    afterScoringValid: 0,
+    afterQualityFilters: 0,
+    afterAutoRelaxation: 0,
+    final: 0,
+    failCounts: {
+      missingStats: 0,
+      nanOrInfinity: 0,
+      fairnessTooHigh: 0,
+      probTooLow: 0,
+      confTooLow: 0,
+      myDeltaTooLow: 0,
+      theirDeltaTooLow: 0,
+      untouchableInTrade: 0,
+      injuredRule: 0,
+      duplicatePlayers: 0,
+      other: 0,
+    },
+  };
+
+  for (const opponentTeam of allTeams) {
+    if (opponentTeam.id === teamId) continue; // Skip self
+
+    const theirTeamTotals = teamsTotals.find((t) => t.teamId === opponentTeam.id);
+    if (!theirTeamTotals) continue;
+
+    const theirZ = zScore(theirTeamTotals, leagueDist);
+    const theirRanks = ranksMap.get(opponentTeam.id) ?? { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, threes: 0, fgPct: 0, ftPct: 0, tov: 0 };
+    const { weaknesses: theirWeaknesses } = identifyFocusCategories(theirZ);
+
+    // Get their players from map
+    const theirPlayers = teamPlayersMap.get(opponentTeam.id) ?? [];
+    debug.rostersLoaded.otherPlayersTotal += theirPlayers.length;
+
+    // Build their untouchables set (core players only, no user-specified for opponent)
+    const theirUntouchables = new Set<string>();
+    if (excludeUntouchables) {
+      theirPlayers.forEach((p) => {
+        if (p.isCore) {
+          theirUntouchables.add(p.playerId);
+        }
+      });
+    }
+
+    // Generate wider candidate pool
+    const candidates: TradeCandidate[] = [];
+    
+    if (!tradeSize || tradeSize === "1for1") {
+      candidates.push(...generate1For1Trades(myPlayers, theirPlayers, myUntouchables, theirUntouchables, showQuestionable));
+    }
+    
+    if (!tradeSize || tradeSize === "2for1") {
+      candidates.push(...generate2For1Trades(myPlayers, theirPlayers, myUntouchables, theirUntouchables, showQuestionable));
+    }
+    
+    if (!tradeSize || tradeSize === "2for2") {
+      candidates.push(...generate2For2Trades(myPlayers, theirPlayers, myUntouchables, theirUntouchables, showQuestionable));
+    }
+    
+    debug.candidatesGenerated += candidates.length;
+
+    // Analyze and score all candidates (no hard filtering yet)
+    const scoredTrades: Array<{
+      candidate: TradeCandidate;
+      analysis: TradeAnalysis;
+      fairness: { fair: boolean; ratio: number; reason?: string };
+      myGrade: string;
+      oppGrade: string;
+      probability: number;
+      confidence: number;
+      score: number; // Combined score for ranking
+      plausibilityScore?: number; // For pass selection
+      myWeaknessGains: number;
+      theirWeaknessGains: number;
+      myAvgPlacementDelta: number;
+      theirAvgPlacementDelta: number;
+    }> = [];
+
+    debug.afterEligibility += candidates.length;
+    
+    // Per-opponent failure counters
+    const failCounts = {
+      missingStats: 0,
+      nanOrInfinity: 0,
+      fairnessTooHigh: 0,
+      probTooLow: 0,
+      confTooLow: 0,
+      myDeltaTooLow: 0,
+      theirDeltaTooLow: 0,
+      untouchableInTrade: 0,
+      injuredRule: 0,
+      duplicatePlayers: 0,
+      lopsided: 0,
+      other: 0,
+    };
+
+    // Helper to check if value is valid (finite, not NaN)
+    const isValidNumber = (val: number): boolean => {
+      return typeof val === "number" && isFinite(val) && !isNaN(val);
+    };
+
+    // Helper to clamp and validate numbers
+    const clamp = (val: number, min: number, max: number): number => {
+      if (!isValidNumber(val)) return min;
+      return Math.max(min, Math.min(max, val));
+    };
+
+    for (const candidate of candidates) {
+      // PASS 0: Sanity checks
+      // Check for duplicate players
+      const allPlayerIds = [...candidate.send.map(p => p.playerId), ...candidate.receive.map(p => p.playerId)];
+      const uniqueIds = new Set(allPlayerIds);
+      if (allPlayerIds.length !== uniqueIds.size) {
+        failCounts.duplicatePlayers++;
+        continue;
+      }
+
+      // Check for untouchables (if excludeUntouchables is on)
+      if (excludeUntouchables) {
+        const hasUntouchable = candidate.send.some(p => myUntouchables.has(p.playerId)) ||
+                               candidate.receive.some(p => theirUntouchables.has(p.playerId));
+        if (hasUntouchable) {
+          failCounts.untouchableInTrade++;
+          continue;
+        }
+      }
+      
+      debug.afterNoUntouchables += 1;
+
+      // Calculate fairness ratio (simple check - will be validated in analyzeTrade)
+      const mySendPTV = candidate.send.reduce((sum, p) => {
+        const player = myPlayers.find((mp) => mp.playerId === p.playerId);
+        const ptv = player?.ptv ?? 0;
+        return sum + (isValidNumber(ptv) ? ptv : 0);
+      }, 0);
+      const theirSendPTV = candidate.receive.reduce((sum, p) => {
+        const player = theirPlayers.find((tp) => tp.playerId === p.playerId);
+        const ptv = player?.ptv ?? 0;
+        return sum + (isValidNumber(ptv) ? ptv : 0);
+      }, 0);
+      
+      // Simple fairness check - reject if one side has 0 PTV or ratio is way off
+      if (mySendPTV === 0 || theirSendPTV === 0 || !isValidNumber(mySendPTV) || !isValidNumber(theirSendPTV)) {
+        failCounts.fairnessTooHigh++;
+        continue;
+      }
+      
+      const fairnessRatio = theirSendPTV / mySendPTV;
+      if (!isValidNumber(fairnessRatio) || fairnessRatio <= 0 || fairnessRatio > 2.0 || fairnessRatio < 0.5) {
+        failCounts.fairnessTooHigh++;
+        continue;
+      }
+      
+      // NOTE: Injured/questionable players are excluded during candidate generation if showQuestionable is off
+      // At scoring phase, we allow all candidates through (they'll just have lower confidence)
+      
+      const analysis = analyzeTrade(
+        candidate,
+        teamId,
+        opponentTeam.id,
+        myTeamTotals,
+        theirTeamTotals,
+        myPlayers,
+        theirPlayers,
+        leagueDist,
+        teamsTotals,
+        allPlayersList
+      );
+
+      if (!analysis) {
+        failCounts.missingStats++;
+        continue;
+      }
+
+      // Validate analysis values
+      if (!isValidNumber(analysis.deltas.my.teamScoreDelta) || 
+          !isValidNumber(analysis.deltas.them.teamScoreDelta)) {
+        failCounts.nanOrInfinity++;
+        continue;
+      }
+
+      // Calculate metrics
+      const myAvgPlacementBefore = calculateAvgPlacement(analysis.myBefore.ranks);
+      const myAvgPlacementAfter = calculateAvgPlacement(analysis.myAfter.ranks);
+      const theirAvgPlacementBefore = calculateAvgPlacement(analysis.themBefore.ranks);
+      const theirAvgPlacementAfter = calculateAvgPlacement(analysis.themAfter.ranks);
+
+      const myWeaknessGains = myWeaknesses.reduce((sum: number, cat: CategoryKey) => {
+        const delta = analysis.deltas.my.categoryDelta[cat] ?? 0;
+        return sum + Math.max(0, delta);
+      }, 0);
+      const myStrengthLosses = myStrengths.reduce((sum: number, cat: CategoryKey) => {
+        const delta = analysis.deltas.my.categoryDelta[cat] ?? 0;
+        return sum + Math.max(0, -delta);
+      }, 0);
+
+      const theirWeaknessGains = theirWeaknesses.reduce((sum: number, cat: CategoryKey) => {
+        const delta = analysis.deltas.them.categoryDelta[cat] ?? 0;
+        return sum + Math.max(0, delta);
+      }, 0);
+
+      // Calculate grades with category deltas to cap FG%/FT% contributions
+      const myGrade = calculateTradeGrade(
+        analysis.deltas.my.teamScoreDelta,
+        myAvgPlacementAfter - myAvgPlacementBefore,
+        analysis.deltas.my.categoryDelta
+      );
+      const oppGrade = calculateTradeGrade(
+        analysis.deltas.them.teamScoreDelta,
+        theirAvgPlacementAfter - theirAvgPlacementBefore,
+        analysis.deltas.them.categoryDelta
+      );
+
+      // Hard rejections (always enforce)
+      if (myGrade === "F" || oppGrade === "F") continue;
+      if (analysis.deltas.my.teamScoreDelta < -0.15 || analysis.deltas.them.teamScoreDelta < -0.15) continue;
+
+      // Check for core players
+      const hasCorePlayer = [
+        ...candidate.send.map((p) => myPlayers.find((mp) => mp.playerId === p.playerId)?.isCore ?? false),
+        ...candidate.receive.map((p) => theirPlayers.find((tp) => tp.playerId === p.playerId)?.isCore ?? false),
+      ].some((isCore) => isCore);
+
+      // Use fairness ratio from analysis (already calculated)
+      const fairnessRatioFromAnalysis = analysis.fairnessRatio;
+
+      // Calculate probability and confidence with safety checks
+      let probability = calculateProbability(
+        fairnessRatioFromAnalysis,
+        myGrade,
+        oppGrade,
+        hasCorePlayer,
+        analysis.deltas.them.teamScoreDelta
+      );
+      probability = clamp(probability / 100, 0.01, 0.99); // Normalize to 0..1 and clamp
+      
+      let confidence = calculateConfidence(candidate, myPlayers, theirPlayers);
+      confidence = clamp(confidence / 100, 0.05, 0.95); // Normalize to 0..1 and clamp
+      
+      // Validate probability and confidence
+      if (!isValidNumber(probability) || !isValidNumber(confidence)) {
+        failCounts.nanOrInfinity++;
+        continue;
+      }
+
+      // Normalize fairness ratio to 0..1
+      const FAIRNESS_SCALE = 0.5; // Typical equal-value trades have ratio around 0.2-0.4
+      let normalizedFairnessRatio = 1.0;
+      if (isValidNumber(fairnessRatioFromAnalysis) && fairnessRatioFromAnalysis > 0) {
+        const rawRatio = Math.abs(fairnessRatioFromAnalysis - 1);
+        normalizedFairnessRatio = clamp(rawRatio / FAIRNESS_SCALE, 0, 1);
+      }
+
+      // Validate fairness ratio
+      if (!isValidNumber(normalizedFairnessRatio)) {
+        failCounts.nanOrInfinity++;
+        continue;
+      }
+
+      // Calculate category fit gain
+      const categoryFitGain = isValidNumber(myWeaknessGains) ? myWeaknessGains : 0;
+
+      // Calculate plausibility and rank scores
+      const fairnessNorm = 1 - normalizedFairnessRatio; // Invert so lower is better
+      const plausibilityScore = (fairnessNorm * 0.45) + (probability * 0.35) + (confidence * 0.20);
+      
+      const myDelta = clamp(analysis.deltas.my.teamScoreDelta, -1, 1);
+      const theirDelta = clamp(analysis.deltas.them.teamScoreDelta, -1, 1);
+      const rankScore = (myDelta * 0.50) + (theirDelta * 0.20) + (fairnessNorm * 0.20) + (probability * 0.10);
+      
+      // Validate scores
+      if (!isValidNumber(plausibilityScore) || !isValidNumber(rankScore)) {
+        failCounts.nanOrInfinity++;
+        continue;
+      }
+
+      scoredTrades.push({
+        candidate,
+        analysis,
+        fairness: { fair: true, ratio: normalizedFairnessRatio }, // Use normalized ratio
+        myGrade,
+        oppGrade,
+        probability: probability * 100, // Convert back to 0-100 for display
+        confidence: confidence * 100, // Convert back to 0-100 for display
+        score: rankScore, // Use rankScore for sorting
+        plausibilityScore, // Store for pass selection
+        myWeaknessGains,
+        theirWeaknessGains,
+        myAvgPlacementDelta: myAvgPlacementAfter - myAvgPlacementBefore,
+        theirAvgPlacementDelta: theirAvgPlacementAfter - theirAvgPlacementBefore,
+      });
+    }
+    
+    // Count valid scored trades
+    debug.afterScoringValid += scoredTrades.length;
+    
+    // Aggregate failure counts
+    Object.keys(failCounts).forEach((key) => {
+      (debug.failCounts as any)[key] += (failCounts as any)[key];
+    });
+
+    // Multi-pass selection (never return 0 if candidates exist)
+    const MIN_RESULTS = 8;
+    let selectedTrades: typeof scoredTrades = [];
+    let passWarning: string | null = null;
+    
+    // PASS 1: Good trades
+    selectedTrades = scoredTrades.filter((st) => {
+      const myDelta = st.analysis.deltas.my.teamScoreDelta;
+      const theirDelta = st.analysis.deltas.them.teamScoreDelta;
+      const fairnessNorm = st.fairness.ratio; // Already normalized 0..1
+      const prob = st.probability / 100; // Convert back to 0..1
+      
+      if (myDelta < 0.01) { failCounts.myDeltaTooLow++; return false; }
+      if (theirDelta < 0.00) { failCounts.theirDeltaTooLow++; return false; }
+      if (fairnessNorm > 0.35) { failCounts.fairnessTooHigh++; return false; }
+      if (prob < 0.15) { failCounts.probTooLow++; return false; }
+      if (st.myGrade === "F" || st.oppGrade === "F") return false;
+      return true;
+    });
+    
+    if (selectedTrades.length >= MIN_RESULTS) {
+      console.log(`[Trade Engine] ${opponentTeam.name}: PASS 1 selected ${selectedTrades.length} trades`);
+    } else {
+      // PASS 2: Neutral them
+      selectedTrades = scoredTrades.filter((st) => {
+        const myDelta = st.analysis.deltas.my.teamScoreDelta;
+        const theirDelta = st.analysis.deltas.them.teamScoreDelta;
+        const fairnessNorm = st.fairness.ratio;
+        const prob = st.probability / 100;
+        
+        if (myDelta < 0.01) return false;
+        if (theirDelta < -0.01) return false;
+        if (fairnessNorm > 0.45) return false;
+        if (prob < 0.10) return false;
+        if (st.myGrade === "F" || st.oppGrade === "F") return false;
+        return true;
+      });
+      
+      if (selectedTrades.length >= MIN_RESULTS) {
+        console.log(`[Trade Engine] ${opponentTeam.name}: PASS 2 selected ${selectedTrades.length} trades`);
+      } else {
+        // PASS 3: Best-effort plausible
+        selectedTrades = scoredTrades.filter((st) => {
+          const myDelta = st.analysis.deltas.my.teamScoreDelta;
+          const theirDelta = st.analysis.deltas.them.teamScoreDelta;
+          const fairnessNorm = st.fairness.ratio;
+          const prob = st.probability / 100;
+          
+          if (myDelta < 0) return false;
+          if (theirDelta < -0.02) return false;
+          if (fairnessNorm > 0.55) return false;
+          if (prob < 0.08) return false;
+          if (st.myGrade === "F" || st.oppGrade === "F") return false;
+          return true;
+        });
+        
+        if (selectedTrades.length >= MIN_RESULTS) {
+          console.log(`[Trade Engine] ${opponentTeam.name}: PASS 3 selected ${selectedTrades.length} trades`);
+          passWarning = "No mutually-positive trades found; showing best-effort plausible offers.";
+        } else {
+          // PASS 4: Never empty - take top by plausibilityScore
+          selectedTrades = scoredTrades
+            .filter((st) => {
+              // Only filter out F grades, everything else is valid
+              if (st.myGrade === "F" || st.oppGrade === "F") return false;
+              // Ensure scores are valid
+              return isValidNumber(st.plausibilityScore ?? 0) && isValidNumber(st.score);
+            })
+            .sort((a, b) => (b.plausibilityScore ?? 0) - (a.plausibilityScore ?? 0))
+            .slice(0, Math.max(MIN_RESULTS, 25));
+          
+          console.log(`[Trade Engine] ${opponentTeam.name}: PASS 4 selected ${selectedTrades.length} trades (best-effort)`);
+          passWarning = "No mutually-positive trades found; showing best-effort plausible offers.";
+        }
+      }
+    }
+    
+    // Ensure we have at least 1 trade if any scored trades exist
+    if (selectedTrades.length === 0 && scoredTrades.length > 0) {
+      // Last resort: take any non-F grade trade
+      selectedTrades = scoredTrades
+        .filter((st) => st.myGrade !== "F" && st.oppGrade !== "F")
+        .sort((a, b) => (b.plausibilityScore ?? 0) - (a.plausibilityScore ?? 0))
+        .slice(0, MIN_RESULTS);
+      passWarning = "No trades passed quality filters, but showing best-effort options.";
+    }
+    
+    // Sort by rankScore (for final ordering)
+    selectedTrades.sort((a, b) => b.score - a.score);
+    
+    // Take top MIN_RESULTS (but ensure at least 1 if any exist)
+    const topTrades = selectedTrades.length > 0 
+      ? selectedTrades.slice(0, MIN_RESULTS)
+      : [];
+    
+    debug.afterQualityFilters = selectedTrades.length;
+    debug.afterAutoRelaxation = topTrades.length;
+    debug.final += topTrades.length;
+    console.log(`[Trade Engine] ${opponentTeam.name}: finalReturned=${topTrades.length}`);
+    
+    // Store pass warning if present
+    if (passWarning && !globalPassWarning) {
+      globalPassWarning = passWarning;
+    }
+    
+    // Build suggestions from scored trades
+    for (const st of topTrades) {
+      const candidate = st.candidate;
+      const analysis = st.analysis;
+
+      // Use precomputed values from scoring
+      const myGrade = st.myGrade;
+      const oppGrade = st.oppGrade;
+      const probability = st.probability;
+      const confidence = st.confidence;
+
+      // Calculate percentiles
+      const myPercentilesBefore = calculateCategoryPercentiles(analysis.myBefore.ranks, allTeams.length);
+      const myPercentilesAfter = calculateCategoryPercentiles(analysis.myAfter.ranks, allTeams.length);
+      const theirPercentilesBefore = calculateCategoryPercentiles(analysis.themBefore.ranks, allTeams.length);
+      const theirPercentilesAfter = calculateCategoryPercentiles(analysis.themAfter.ranks, allTeams.length);
+
+      const myPercentilesDelta: Record<string, number> = {};
+      const theirPercentilesDelta: Record<string, number> = {};
+      for (const cat of Object.keys(myPercentilesBefore)) {
+        myPercentilesDelta[cat] = myPercentilesAfter[cat] - myPercentilesBefore[cat];
+        theirPercentilesDelta[cat] = theirPercentilesAfter[cat] - theirPercentilesBefore[cat];
+      }
+
+      // Recalculate avg placement for response
+      const myAvgPlacementBefore = calculateAvgPlacement(analysis.myBefore.ranks);
+      const myAvgPlacementAfter = calculateAvgPlacement(analysis.myAfter.ranks);
+      const theirAvgPlacementBefore = calculateAvgPlacement(analysis.themBefore.ranks);
+      const theirAvgPlacementAfter = calculateAvgPlacement(analysis.themAfter.ranks);
+
+      // Calculate top gains/losses (accounting for TO directionality)
+      const { CATEGORY_HIGHER_IS_BETTER } = await import("./lib/tradeEngine.js");
+      const adjustDeltaForDirection = (cat: string, delta: number): number => {
+        const higherIsBetter = CATEGORY_HIGHER_IS_BETTER[cat as CategoryKey] ?? true;
+        // For TO (lower is better), invert the delta: negative delta = gain, positive delta = loss
+        return higherIsBetter ? delta : -delta;
+      };
+
+      // Calculate top gains/losses using percentile deltas (more accurate)
+      // Exclude abs(delta) < 0.1 and adjust for TO directionality
+      const myTopGains = Object.entries(myPercentilesDelta)
+        .map(([cat, delta]) => ({ 
+          category: cat, 
+          delta: delta as number,
+          adjustedDelta: adjustDeltaForDirection(cat, delta as number)
+        }))
+        .filter(item => Math.abs(item.adjustedDelta) >= 0.1) // Filter out < 0.1% changes
+        .filter(item => item.adjustedDelta > 0) // Only gains
+        .sort((a, b) => b.adjustedDelta - a.adjustedDelta)
+        .slice(0, 3)
+        .map(({ category, delta }) => ({ category, delta }));
+      
+      const myTopLosses = Object.entries(myPercentilesDelta)
+        .map(([cat, delta]) => ({ 
+          category: cat, 
+          delta: delta as number,
+          adjustedDelta: adjustDeltaForDirection(cat, delta as number)
+        }))
+        .filter(item => Math.abs(item.adjustedDelta) >= 0.1) // Filter out < 0.1% changes
+        .filter(item => item.adjustedDelta < 0) // Only losses
+        .sort((a, b) => a.adjustedDelta - b.adjustedDelta)
+        .slice(0, 2)
+        .map(({ category, delta }) => ({ category, delta }));
+      
+      // Calculate opponent top gains/losses using percentile deltas
+      const oppTopGains = Object.entries(theirPercentilesDelta)
+        .map(([cat, delta]) => ({ 
+          category: cat, 
+          delta: delta as number,
+          adjustedDelta: adjustDeltaForDirection(cat, delta as number)
+        }))
+        .filter(item => Math.abs(item.adjustedDelta) >= 0.1) // Filter out < 0.1% changes
+        .filter(item => item.adjustedDelta > 0) // Only gains
+        .sort((a, b) => b.adjustedDelta - a.adjustedDelta)
+        .slice(0, 3)
+        .map(({ category, delta }) => ({ category, delta }));
+      
+      const oppTopLosses = Object.entries(theirPercentilesDelta)
+        .map(([cat, delta]) => ({ 
+          category: cat, 
+          delta: delta as number,
+          adjustedDelta: adjustDeltaForDirection(cat, delta as number)
+        }))
+        .filter(item => Math.abs(item.adjustedDelta) >= 0.1) // Filter out < 0.1% changes
+        .filter(item => item.adjustedDelta < 0) // Only losses
+        .sort((a, b) => a.adjustedDelta - b.adjustedDelta)
+        .slice(0, 2)
+        .map(({ category, delta }) => ({ category, delta }));
+      
+      // Debug log for percentile calculation verification
+      if (allSuggestions.length === 0) {
+        const sampleCat = "pts";
+        console.log("[Trade Engine Debug] Percentile calculation sample:", {
+          category: sampleCat,
+          rankBefore: analysis.myBefore.ranks[sampleCat],
+          rankAfter: analysis.myAfter.ranks[sampleCat],
+          percentileBefore: myPercentilesBefore[sampleCat],
+          percentileAfter: myPercentilesAfter[sampleCat],
+          percentileDelta: myPercentilesDelta[sampleCat],
+          totalTeams: allTeams.length
+        });
+      }
+
+      // Generate rationale
+      const rationale = generateRationale(analysis, myGrade, oppGrade);
+
+      const opponentAvatarUrl = await getTeamAvatarUrl(req, opponentTeam.id);
+
+      // Prepare per-category data for details view
+      const categoryKeys: CategoryKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
+      const isPctCategory = (cat: string) => cat === "fgPct" || cat === "ftPct";
+      const isCountingStat = (cat: string) => !isPctCategory(cat);
+      
+      const myCategoryDetails = categoryKeys.map((cat) => {
+        const totalBefore = analysis.myBefore.totals[cat] ?? 0;
+        const totalAfter = analysis.myAfter.totals[cat] ?? 0;
+        const deltaTotal = totalAfter - totalBefore;
+        
+        // Calculate percent change of totals
+        let deltaTotalPct = 0;
+        if (isPctCategory(cat)) {
+          // For FG%/FT%: show percentage points (pp)
+          deltaTotalPct = deltaTotal * 100; // e.g., 0.460 -> 0.462 = +0.2pp
+        } else {
+          // For counting stats: percent change
+          if (totalBefore !== 0) {
+            deltaTotalPct = (deltaTotal / totalBefore) * 100;
+          }
+        }
+        
+        return {
+          category: cat,
+          totalBefore,
+          totalAfter,
+          deltaTotal,
+          deltaTotalPct,
+          rankBefore: analysis.myBefore.ranks[cat] ?? 0,
+          rankAfter: analysis.myAfter.ranks[cat] ?? 0,
+          rankDelta: (analysis.myAfter.ranks[cat] ?? 0) - (analysis.myBefore.ranks[cat] ?? 0),
+        };
+      });
+      
+      const oppCategoryDetails = categoryKeys.map((cat) => {
+        const totalBefore = analysis.themBefore.totals[cat] ?? 0;
+        const totalAfter = analysis.themAfter.totals[cat] ?? 0;
+        const deltaTotal = totalAfter - totalBefore;
+        
+        // Calculate percent change of totals
+        let deltaTotalPct = 0;
+        if (isPctCategory(cat)) {
+          // For FG%/FT%: show percentage points (pp)
+          deltaTotalPct = deltaTotal * 100;
+        } else {
+          // For counting stats: percent change
+          if (totalBefore !== 0) {
+            deltaTotalPct = (deltaTotal / totalBefore) * 100;
+          }
+        }
+        
+        return {
+          category: cat,
+          totalBefore,
+          totalAfter,
+          deltaTotal,
+          deltaTotalPct,
+          rankBefore: analysis.themBefore.ranks[cat] ?? 0,
+          rankAfter: analysis.themAfter.ranks[cat] ?? 0,
+          rankDelta: (analysis.themAfter.ranks[cat] ?? 0) - (analysis.themBefore.ranks[cat] ?? 0),
+        };
+      });
+
+      allSuggestions.push({
+        id: `${teamId}_${opponentTeam.id}_${candidate.send.map((p) => p.playerId).join("_")}_${candidate.receive.map((p) => p.playerId).join("_")}`,
+        partnerTeam: {
+          id: opponentTeam.id,
+          name: opponentTeam.name,
+          avatarUrl: opponentAvatarUrl,
+        },
+        trade: candidate,
+        impact: {
+          my: {
+            teamScoreBefore: analysis.myBefore.teamScore0to9,
+            teamScoreAfter: analysis.myAfter.teamScore0to9,
+            teamScoreDelta: analysis.deltas.my.teamScoreDelta,
+            avgPlacementBefore: myAvgPlacementBefore,
+            avgPlacementAfter: myAvgPlacementAfter,
+            avgPlacementDelta: myAvgPlacementAfter - myAvgPlacementBefore,
+            categoryPercentilesBefore: myPercentilesBefore,
+            categoryPercentilesAfter: myPercentilesAfter,
+            categoryPercentilesDelta: myPercentilesDelta,
+            categoryDetails: myCategoryDetails,
+            grade: myGrade,
+            probability,
+            confidence,
+          },
+          opp: {
+            teamScoreBefore: analysis.themBefore.teamScore0to9,
+            teamScoreAfter: analysis.themAfter.teamScore0to9,
+            teamScoreDelta: analysis.deltas.them.teamScoreDelta,
+            avgPlacementBefore: theirAvgPlacementBefore,
+            avgPlacementAfter: theirAvgPlacementAfter,
+            avgPlacementDelta: theirAvgPlacementAfter - theirAvgPlacementBefore,
+            categoryPercentilesBefore: theirPercentilesBefore,
+            categoryPercentilesAfter: theirPercentilesAfter,
+            categoryPercentilesDelta: theirPercentilesDelta,
+            categoryDetails: oppCategoryDetails,
+            grade: oppGrade,
+            probability,
+            confidence,
+          },
+        },
+        summary: {
+          myTopGains,
+          myTopLosses,
+          oppTopGains,
+          oppTopLosses,
+        },
+        rationaleBullets: rationale,
+      });
+    }
+  }
+
+  // Already sorted by score in scoring phase, no need to re-sort
+  // Return all suggestions (already limited to top 20 per opponent, but we aggregate across all opponents)
+
+  // Determine reason if empty
+  let reason: string | null = null;
+  let ok = true;
+  let warning: string | null = null;
+  
+  if (allSuggestions.length === 0) {
+    ok = false;
+    if (debug.candidatesGenerated === 0) {
+      reason = "No candidates generated (missing stats/projections/rosters).";
+    } else if (debug.afterNoUntouchables === 0) {
+      reason = "Untouchables filter removed all candidates.";
+    } else if (debug.afterScoringValid === 0) {
+      reason = "All candidates failed scoring validation (NaN/Infinity or missing data).";
+    } else if (debug.afterQualityFilters === 0) {
+      reason = "All candidates failed quality filters.";
+    } else {
+      reason = "No trades passed all filters.";
+    }
+  } else {
+    // Check if we should show low confidence warning
+    const avgProbability = allSuggestions.reduce((sum, s) => sum + s.impact.my.probability, 0) / allSuggestions.length;
+    const avgConfidence = allSuggestions.reduce((sum, s) => sum + s.impact.my.confidence, 0) / allSuggestions.length;
+    
+    if (avgProbability < 35 || avgConfidence < 35) {
+      warning = "Trades found, but confidence is low (injuries / volatility). Showing best options anyway.";
+    }
+  }
+
+  const myTeamAvatarUrl = await getTeamAvatarUrl(req, myTeam.id);
+
+  const response: any = {
+    ok,
+    myTeam: {
+      id: myTeam.id,
+      name: myTeam.name,
+      avatarUrl: myTeamAvatarUrl,
+    },
+    suggestions: allSuggestions,
+    leagueTeamsCount: allTeams.length,
+  };
+
+  if (warning) {
+    response.warning = warning;
+  }
+
+  // Include debug info in dev mode
+  if (process.env.NODE_ENV !== "production") {
+    response.debug = debug;
+    if (reason) {
+      response.reason = reason;
+    }
+  }
+
+  // Log summary with top failure reasons
+  const topFailReasons = Object.entries(debug.failCounts)
+    .filter(([_, count]) => count > 0)
+    .sort(([_, a], [__, b]) => b - a)
+    .slice(0, 5)
+    .map(([reason, count]) => `${reason}=${count}`)
+    .join(", ");
+  
+  console.log(`[Trade Engine] Summary: candidatesGenerated=${debug.candidatesGenerated}, afterScoringValid=${debug.afterScoringValid}, final=${debug.final}, ok=${ok}`);
+  if (topFailReasons) {
+    console.log(`[Trade Engine] Top failure reasons: ${topFailReasons}`);
+  }
+  if (reason) {
+    console.log(`[Trade Engine] Empty reason: ${reason}`);
+  }
+  if (warning) {
+    console.log(`[Trade Engine] Warning: ${warning}`);
+  }
+
+  return res.status(200).json(response);
+});
+
 
 // ---------- START ----------
 const port = Number(process.env.PORT ?? 3000);
