@@ -263,8 +263,8 @@ export default function WeeklyProjections() {
       let absDelta: number;
 
       if (isPercentage) {
-        // For percentages, compute difference in percentage points
-        delta = myValue - oppValue;
+        // For percentages (stored as decimals), convert to percentage points for comparison
+        delta = (myValue - oppValue) * 100;
         absDelta = Math.abs(delta);
       } else {
         // For counting stats, raw difference
@@ -293,29 +293,151 @@ export default function WeeklyProjections() {
     contestedCategories.sort((a, b) => a.absDelta - b.absDelta);
   }
 
-  // Take top 3-4 (let's do 4)
-  const topContested = contestedCategories.slice(0, 4);
+  // Take top 4, excluding turnovers (can't stream for fewer TOs)
+  const topContested = contestedCategories
+    .filter(c => c.key !== "tov")
+    .slice(0, 4);
+
+  // Compute live contested categories (if live category data available)
+  const liveCategories = (projections as any).liveCategories;
+  const liveContestedCategories: ContestedCategory[] = [];
+  const liveMatchupScore = (projections as any).liveMatchupScore;
+  
+  if (liveCategories && projections.opponent) {
+    categoryKeys.forEach((key) => {
+      const liveCat = liveCategories.find((c: any) => c.key === key);
+      if (!liveCat) return;
+      
+      const myValue = liveCat.teamTotal;
+      const oppValue = liveCat.opponentTotal;
+      const isPercentage = key === "fgPct" || key === "ftPct";
+      const isTurnover = key === "tov";
+
+      let delta: number;
+      let absDelta: number;
+
+      if (isPercentage) {
+        // Percentages come as decimals (0.45), convert to percentage points for comparison
+        delta = (myValue - oppValue) * 100;
+        absDelta = Math.abs(delta);
+      } else {
+        delta = myValue - oppValue;
+        absDelta = Math.abs(delta);
+      }
+
+      const isFavored = isTurnover ? myValue < oppValue : myValue > oppValue;
+
+      liveContestedCategories.push({
+        key,
+        label: categoryLabels[key],
+        myValue,
+        oppValue,
+        delta,
+        absDelta,
+        isPercentage,
+        isFavored,
+        isTurnover,
+      });
+    });
+
+    // Sort by absDelta (smallest = most contested)
+    // Exclude turnovers from top contested since you can't stream for fewer TOs
+    liveContestedCategories.sort((a, b) => a.absDelta - b.absDelta);
+  }
+  
+  // Filter out turnovers for display - can't improve TO by streaming
+  const topLiveContested = liveContestedCategories
+    .filter(c => c.key !== "tov")
+    .slice(0, 4);
+
+  // Compute final combined contested categories
+  // Exclude turnovers - you can't stream for fewer turnovers
+  let finalContestedCategories: Array<ContestedCategory & { source: "Projected" | "Live" | "Equal" }> = [];
+  const finalSelectedKeys = new Set<string>();
+  
+  if (projections.opponent) {
+    // Filter out turnovers from consideration
+    const streamableKeys = categoryKeys.filter(k => k !== "tov");
+    
+    const combined = streamableKeys.map((key) => {
+      const projectedCat = contestedCategories.find(c => c.key === key);
+      const liveCat = liveContestedCategories.find(c => c.key === key);
+      
+      // For percentages, projected values need same scaling as live (multiply by 100)
+      const isPercentage = key === "fgPct" || key === "ftPct";
+      const projectedDelta = projectedCat 
+        ? (isPercentage ? projectedCat.absDelta * 100 : projectedCat.absDelta)
+        : 0;
+      const liveDelta = liveCat?.absDelta || projectedDelta;
+      
+      const smallerDelta = Math.min(projectedDelta, liveDelta);
+      const source: "Projected" | "Live" | "Equal" = 
+        projectedDelta < liveDelta ? "Projected" : 
+        projectedDelta > liveDelta ? "Live" : 
+        "Equal";
+      
+      // Use live values when source is "Live", otherwise use projected
+      const cat = source === "Live" && liveCat ? liveCat : projectedCat!;
+      return { ...cat, priorityDelta: smallerDelta, source };
+    });
+    
+    // Sort by priority delta (smallest = most contested)
+    combined.sort((a, b) => a.priorityDelta - b.priorityDelta);
+    finalContestedCategories = combined.slice(0, 4);
+    
+    // Track which keys are selected for final focus
+    finalContestedCategories.forEach(cat => finalSelectedKeys.add(cat.key));
+  }
 
   return (
     <TopNav>
       <div className="weekly-projections-page">
         <div className="weekly-projections-header">
-          <h1 className="weekly-projections-title">Weekly Projections</h1>
-          <div className="weekly-projections-meta">
-            <span>
-              Scoring Period {projections.scoringPeriod.id}:{" "}
-              {new Date(projections.scoringPeriod.startAt).toLocaleDateString()} -{" "}
-              {new Date(projections.scoringPeriod.endAt).toLocaleDateString()}
-            </span>
+          <div className="header-left-section">
+            <h1 className="weekly-projections-title">Weekly Projections</h1>
+            <p className="weekly-projections-description">
+              Track your matchup in real-time. <strong>Projected</strong> shows where you'll end up based on scheduled games. 
+              <strong> Live</strong> shows your current actual score. Use <strong>Final Streaming Focus</strong> to guide your add/drop decisions.
+            </p>
+            <div className="weekly-projections-meta">
+              <span>
+                Scoring Period {projections.scoringPeriod.id}:{" "}
+                {new Date(projections.scoringPeriod.startAt).toLocaleDateString()} -{" "}
+                {new Date(projections.scoringPeriod.endAt).toLocaleDateString()}
+              </span>
+            </div>
           </div>
+          <button 
+            className="refresh-espn-button"
+            onClick={async () => {
+              try {
+                setLoading(true);
+                await api.refreshEspnData();
+                alert('ESPN data refreshed! Reloading...');
+                await loadData();
+              } catch (err) {
+                alert('Error refreshing ESPN data: ' + (err instanceof Error ? err.message : 'Unknown error'));
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            🔄 Refresh ESPN Data
+          </button>
         </div>
 
-        {/* Matchup Summary */}
-        {projections.matchup && projections.opponent && (
-          <Card className="matchup-summary-card">
-            <div className="matchup-summary-header">
-              <h2 className="card-title">Matchup Summary</h2>
-            </div>
+        {/* Two-Column Layout: Projected vs Live */}
+        <div className="projections-two-column">
+          {/* LEFT COLUMN: PROJECTED */}
+          <div className="projection-column projected-column">
+            <h2 className="column-title">📊 Projected</h2>
+            
+            {/* Projected Matchup Summary */}
+            {projections.matchup && projections.opponent && (
+              <Card className="matchup-summary-card projected-card">
+                <div className="matchup-summary-header">
+                  <h3 className="card-title">Projected Matchup Score</h3>
+                </div>
             <div className="matchup-summary-content">
               <div className="matchup-teams">
                 <div className="matchup-team-card">
@@ -390,21 +512,22 @@ export default function WeeklyProjections() {
           </Card>
         )}
 
-        {/* Biggest Contention */}
-        <Card className="biggest-contention-card">
-          <h2 className="card-title">Biggest Contention</h2>
-          {projections.opponent ? (
-            <>
-              <p className="contention-description">
-                These are the closest categories in your matchup — small swings can decide the outcome.
-              </p>
+            {/* Projected Biggest Contentions */}
+            <Card className="biggest-contention-card projected-card">
+              <h3 className="card-title">Projected Biggest Contentions</h3>
+              {projections.opponent ? (
+                <>
+                  <p className="contention-description">
+                    Closest projected categories — small swings can decide the outcome.
+                  </p>
               <div className="contested-categories-grid">
-                {topContested.map((cat) => (
-                  <div
-                    key={cat.key}
-                    className={`contested-category-pill ${cat.isFavored ? "favored" : "behind"}`}
-                  >
-                    <div className="contested-cat-label">{cat.label}</div>
+                {topContested.map((cat) => {
+                  return (
+                    <div
+                      key={cat.key}
+                      className={`contested-category-pill ${cat.isFavored ? "favored" : "behind"}`}
+                    >
+                      <div className="contested-cat-label">{cat.label}</div>
                     <div className="contested-cat-values">
                       <div className="value-with-label">
                         <span className="value-owner-label">You</span>
@@ -424,7 +547,7 @@ export default function WeeklyProjections() {
                       <span className={`delta-badge ${cat.isFavored ? "positive" : "negative"}`}>
                         {cat.isFavored ? "↑" : "↓"}{" "}
                         {cat.isPercentage
-                          ? `${Math.abs(cat.delta * 100).toFixed(1)}pp`
+                          ? `${Math.abs(cat.delta).toFixed(1)}pp`
                           : cat.delta > 0
                           ? `+${cat.delta.toFixed(1)}`
                           : cat.delta.toFixed(1)}
@@ -434,21 +557,226 @@ export default function WeeklyProjections() {
                       </span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
-              <div className="contention-cta">
-                <p className="cta-text">Streaming targets should focus on these cats.</p>
-                <button className="cta-button" onClick={() => navigate("/streaming")}>
-                  Go to Streaming →
-                </button>
-              </div>
-            </>
-          ) : (
-            <p className="no-opponent-message">
-              No opponent matchup found — contention analysis unavailable.
-            </p>
-          )}
-        </Card>
+                </>
+              ) : (
+                <p className="no-opponent-message">
+                  No opponent matchup found — contention analysis unavailable.
+                </p>
+              )}
+            </Card>
+          </div>
+
+          {/* RIGHT COLUMN: LIVE */}
+          <div className="projection-column live-column">
+            <h2 className="column-title">🔴 Live</h2>
+            
+            {/* Live Matchup Score */}
+            {liveMatchupScore && projections.opponent && (
+              <Card className="matchup-summary-card live-card">
+                <div className="matchup-summary-header">
+                  <h3 className="card-title">Live Matchup Score</h3>
+                </div>
+                <div className="matchup-summary-content">
+                  <div className="matchup-teams">
+                    <div className="matchup-team-card">
+                      {projections.team.avatarUrl ? (
+                        <img src={projections.team.avatarUrl} alt={projections.team.teamName} className="team-avatar" />
+                      ) : (
+                        <div className="team-avatar-placeholder"></div>
+                      )}
+                      <div className="team-name">{projections.team.teamName}</div>
+                      <div className="team-score live-score">
+                        {liveMatchupScore.teamCatsWon}
+                      </div>
+                    </div>
+                    <div className="matchup-vs">VS</div>
+                    <div className="matchup-team-card">
+                      {projections.opponent.avatarUrl ? (
+                        <img src={projections.opponent.avatarUrl} alt={projections.opponent.teamName} className="team-avatar" />
+                      ) : (
+                        <div className="team-avatar-placeholder"></div>
+                      )}
+                      <div className="team-name">{projections.opponent.teamName}</div>
+                      <div className="team-score live-score">
+                        {liveMatchupScore.opponentCatsWon}
+                      </div>
+                    </div>
+                  </div>
+                  {liveCategories && liveCategories.length > 0 && (
+                    <div className="matchup-summary-categories">
+                      {liveCategories.map((cat: any) => {
+                        const isTeamWinner = cat.winner === "TEAM";
+                        const isOpponentWinner = cat.winner === "OPPONENT";
+                        return (
+                          <div
+                            key={cat.key}
+                            className={`summary-category-box ${
+                              isTeamWinner
+                                ? "category-winner-team"
+                                : isOpponentWinner
+                                ? "category-winner-opponent"
+                                : "category-tie"
+                            }`}
+                            title={`${categoryLabels[cat.key]}: ${isTeamWinner ? projections.team.teamName : isOpponentWinner && projections.opponent ? projections.opponent.teamName : "Tie"}`}
+                          >
+                            <div className="category-box-label">{categoryLabels[cat.key]}</div>
+                            {isTeamWinner && projections.team.avatarUrl ? (
+                              <img
+                                src={projections.team.avatarUrl}
+                                alt={projections.team.teamName}
+                                className="category-box-avatar"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = "none";
+                                }}
+                              />
+                            ) : isOpponentWinner && projections.opponent && projections.opponent.avatarUrl ? (
+                              <img
+                                src={projections.opponent.avatarUrl}
+                                alt={projections.opponent.teamName}
+                                className="category-box-avatar"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = "none";
+                                }}
+                              />
+                            ) : (
+                              <div className="category-box-tie">—</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+
+            {/* Live Biggest Contentions */}
+            <Card className="biggest-contention-card live-card">
+              <h3 className="card-title">Live Biggest Contentions</h3>
+              {projections.opponent && topLiveContested.length > 0 ? (
+                <>
+                  <p className="contention-description">
+                    Closest categories based on current live scores.
+                  </p>
+                  <div className="contested-categories-grid">
+                    {topLiveContested.map((cat) => {
+                      return (
+                        <div
+                          key={cat.key}
+                          className={`contested-category-pill ${cat.isFavored ? "favored" : "behind"}`}
+                        >
+                          <div className="contested-cat-label">{cat.label}</div>
+                          <div className="contested-cat-values">
+                            <div className="value-with-label">
+                              <span className="value-owner-label">You</span>
+                              <span className="my-value">
+                                {cat.isPercentage ? (cat.myValue * 100).toFixed(1) + "%" : cat.myValue.toFixed(1)}
+                              </span>
+                            </div>
+                            <span className="vs-separator">vs</span>
+                            <div className="value-with-label">
+                              <span className="value-owner-label">Them</span>
+                              <span className="opp-value">
+                                {cat.isPercentage ? (cat.oppValue * 100).toFixed(1) + "%" : cat.oppValue.toFixed(1)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="contested-cat-delta">
+                            <span className={`delta-badge ${cat.isFavored ? "positive" : "negative"}`}>
+                              {cat.isFavored ? "↑" : "↓"}{" "}
+                              {cat.isPercentage
+                                ? `${Math.abs(cat.delta).toFixed(1)}pp`
+                                : cat.delta > 0
+                                ? `+${cat.delta.toFixed(1)}`
+                                : cat.delta.toFixed(1)}
+                            </span>
+                            <span className="advantage-indicator">
+                              {cat.isFavored ? "Ahead" : "Behind"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : projections.opponent ? (
+                <p className="no-opponent-message">
+                  Live category data not yet available. Check back once games start.
+                </p>
+              ) : (
+                <p className="no-opponent-message">
+                  No live matchup data available.
+                </p>
+              )}
+            </Card>
+          </div>
+        </div>
+
+        {/* Final Streaming Focus Section */}
+        {projections.opponent && finalContestedCategories.length > 0 && (
+          <Card className="final-streaming-focus-card">
+            <div className="final-focus-header">
+              <h2 className="card-title">🎯 Final Streaming Focus</h2>
+              <p className="final-focus-description">
+                Top 4 most contested categories combining both projected and live analysis. Focus your streaming targets on these.
+              </p>
+            </div>
+            <div className="final-focus-grid">
+              {finalContestedCategories.map((cat) => (
+                <div
+                  key={cat.key}
+                  className={`final-focus-pill ${cat.isFavored ? "favored" : "behind"} selected-for-final`}
+                >
+                  <div className="selected-indicator">✓ SELECTED</div>
+                  <div className="final-focus-cat-label">{cat.label}</div>
+                  <div className="final-focus-source-badge">
+                    <span className="source-label">Closest because:</span>
+                    <span className={`source-value source-${cat.source.toLowerCase()}`}>
+                      {cat.source}
+                    </span>
+                  </div>
+                  <div className="final-focus-values">
+                    <div className="value-with-label">
+                      <span className="value-owner-label">You</span>
+                      <span className="my-value">
+                        {cat.isPercentage ? (cat.myValue * 100).toFixed(1) + "%" : cat.myValue.toFixed(1)}
+                      </span>
+                    </div>
+                    <span className="vs-separator">vs</span>
+                    <div className="value-with-label">
+                      <span className="value-owner-label">Them</span>
+                      <span className="opp-value">
+                        {cat.isPercentage ? (cat.oppValue * 100).toFixed(1) + "%" : cat.oppValue.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="final-focus-delta">
+                    <span className={`delta-badge ${cat.isFavored ? "positive" : "negative"}`}>
+                      {cat.isFavored ? "↑" : "↓"}{" "}
+                      {cat.isPercentage
+                        ? `${Math.abs(cat.delta).toFixed(1)}pp`
+                        : cat.delta > 0
+                        ? `+${cat.delta.toFixed(1)}`
+                        : cat.delta.toFixed(1)}
+                    </span>
+                    <span className="advantage-indicator">
+                      {cat.isFavored ? "Ahead" : "Behind"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="contention-cta">
+              <p className="cta-text">Use these categories to guide your streaming decisions.</p>
+              <button className="cta-button" onClick={() => navigate("/streaming")}>
+                Go to Streaming →
+              </button>
+            </div>
+          </Card>
+        )}
 
         {/* Chart */}
         <Card className="weekly-projections-card-full">
@@ -471,6 +799,9 @@ export default function WeeklyProjections() {
         {projections.matchup && (
           <Card className="category-winners-card">
             <h2 className="card-title">Category Winners</h2>
+            <p className="category-winners-description">
+              Detailed breakdown of projected category winners. ✓ means you win, ✗ means opponent wins, — means tie.
+            </p>
             <div className="category-winners-table">
               <table>
                 <thead>

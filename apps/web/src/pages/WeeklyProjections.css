@@ -1,19 +1,63 @@
 .weekly-projections-page {
   width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1rem;
 }
 
 .weekly-projections-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 2rem;
+  gap: 2rem;
+}
+
+.header-left-section {
+  flex: 1;
 }
 
 .weekly-projections-title {
   font-size: 2rem;
   font-weight: 700;
   color: #222;
-  margin: 0;
+  margin: 0 0 0.5rem 0;
+}
+
+.weekly-projections-description {
+  font-size: 0.9375rem;
+  color: #666;
+  line-height: 1.6;
+  margin: 0 0 0.75rem 0;
+}
+
+.weekly-projections-description strong {
+  color: #222;
+  font-weight: 600;
+}
+
+.refresh-espn-button {
+  padding: 0.75rem 1.5rem;
+  background: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 102, 204, 0.2);
+}
+
+.refresh-espn-button:hover {
+  background: #0052a3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 102, 204, 0.3);
+}
+
+.refresh-espn-button:active {
+  transform: translateY(0);
 }
 
 .weekly-projections-controls {
@@ -657,6 +701,314 @@
   .cta-button {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* Two-Column Layout: Projected vs Live */
+.projections-two-column {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  align-items: start;
+}
+
+.projection-column {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 1rem;
+  height: 100%;
+}
+
+.projection-column > .column-title {
+  grid-row: 1;
+}
+
+.projection-column > .matchup-summary-card {
+  grid-row: 2;
+}
+
+.projection-column > .biggest-contention-card {
+  grid-row: 3;
+}
+
+.column-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #222;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.projected-column .column-title {
+  color: #0066cc;
+}
+
+.live-column .column-title {
+  color: #e31837;
+}
+
+.projected-card {
+  border-left: 4px solid #0066cc;
+}
+
+.live-card {
+  border-left: 4px solid #e31837;
+}
+
+.live-score {
+  color: #e31837;
+  font-weight: 900;
+}
+
+.live-score-note {
+  text-align: center;
+  font-size: 0.875rem;
+  color: #666;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+/* Selected for Final Streaming Focus indicator */
+.selected-for-final {
+  border: 3px solid #00a651 !important;
+  box-shadow: 0 0 0 2px rgba(0, 166, 81, 0.1) !important;
+  position: relative;
+}
+
+.selected-indicator {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: #00a651;
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  z-index: 1;
+}
+
+.contested-category-pill {
+  position: relative;
+}
+
+/* Alignment fixes for live vs projected */
+.projection-column .matchup-summary-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.projection-column .biggest-contention-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.matchup-summary-card {
+  padding: 1.5rem;
+}
+
+.matchup-summary-header {
+  margin-bottom: 1rem;
+}
+
+.matchup-summary-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.matchup-teams {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.matchup-summary-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.matchup-summary-card .card-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #222;
+}
+
+.biggest-contention-card .card-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #222;
+}
+
+.biggest-contention-card .contention-description {
+  margin: 0 0 1rem 0;
+  font-size: 0.875rem;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* Category Winners description */
+.category-winners-description {
+  font-size: 0.875rem;
+  color: #666;
+  line-height: 1.5;
+  margin: 0.5rem 0 1rem 0;
+}
+
+/* Final Streaming Focus */
+.final-streaming-focus-card {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  border-left: 4px solid #00a651;
+}
+
+.final-focus-header {
+  margin-bottom: 1.5rem;
+}
+
+.final-focus-header .card-title {
+  font-size: 1.5rem;
+  color: #222;
+  margin: 0 0 0.5rem 0;
+}
+
+.final-focus-description {
+  font-size: 0.9375rem;
+  color: #666;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.final-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.final-focus-pill {
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  transition: all 0.2s ease;
+}
+
+.final-focus-pill:hover {
+  border-color: #00a651;
+  box-shadow: 0 2px 8px rgba(0, 166, 81, 0.1);
+}
+
+.final-focus-pill.favored {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.final-focus-pill.behind {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.final-focus-cat-label {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 0.75rem;
+}
+
+.final-focus-source-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.source-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.source-value {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
+
+.source-value.source-projected {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.source-value.source-live {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.source-value.source-equal {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.final-focus-values {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.final-focus-delta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 968px) {
+  .projections-two-column {
+    grid-template-columns: 1fr;
+  }
+  
+  .weekly-projections-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .refresh-espn-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .final-focus-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .weekly-projections-title {
+    font-size: 1.5rem;
   }
 }
 

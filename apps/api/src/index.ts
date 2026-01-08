@@ -625,6 +625,84 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
       console.warn(`No matchup data found for team ${selectedTeam.id}. Team meta:`, teamMeta);
     }
 
+    // Add live/current matchup score and category results
+    // ESPN provides scoreByStat with actual live category totals
+    let liveMatchupScore = null;
+    let liveCategories: any[] | null = null;
+    
+    // ESPN stat ID to 9-cat key mapping
+    const espnStatIdToKey: Record<number, string> = {
+      0: "pts",    // Points
+      1: "blk",    // Blocks
+      2: "stl",    // Steals
+      3: "ast",    // Assists
+      6: "reb",    // Rebounds
+      11: "tov",   // Turnovers
+      17: "threes", // 3-Pointers Made
+      19: "fgPct", // FG%
+      20: "ftPct", // FT%
+    };
+    
+    if (matchupData) {
+      // Use ESPN's category wins/losses for the live score
+      liveMatchupScore = {
+        teamCatsWon: matchupData.myCatsWon || 0,
+        teamCatsLost: matchupData.myCatsLost || 0,
+        tied: matchupData.myCatsTied || 0,
+        opponentCatsWon: matchupData.oppCatsWon || 0,
+        opponentCatsLost: matchupData.oppCatsLost || 0,
+        opponentTied: matchupData.oppCatsTied || 0,
+      };
+      
+      // Use actual ESPN scoreByStat for live category breakdown
+      const myScoreByStat = matchupData.myScoreByStat || {};
+      const oppScoreByStat = matchupData.oppScoreByStat || {};
+      
+      if (Object.keys(myScoreByStat).length > 0) {
+        // Build live categories from ESPN's actual stats
+        const categoryKeys = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
+        liveCategories = categoryKeys.map(key => {
+          // Find ESPN stat ID for this key
+          const espnStatId = Object.entries(espnStatIdToKey).find(([_, k]) => k === key)?.[0];
+          const myStatData = espnStatId ? myScoreByStat[espnStatId] : null;
+          const oppStatData = espnStatId ? oppScoreByStat[espnStatId] : null;
+          
+          const teamTotal = myStatData?.score ?? 0;
+          const opponentTotal = oppStatData?.score ?? 0;
+          
+          // Determine winner based on ESPN's result field, or calculate it
+          let winner: "TEAM" | "OPPONENT" | "TIE" = "TIE";
+          if (myStatData?.result === "WIN") {
+            winner = "TEAM";
+          } else if (myStatData?.result === "LOSS") {
+            winner = "OPPONENT";
+          } else if (key === "tov") {
+            // Lower is better for turnovers
+            if (teamTotal < opponentTotal) winner = "TEAM";
+            else if (teamTotal > opponentTotal) winner = "OPPONENT";
+          } else {
+            // Higher is better for other stats
+            if (teamTotal > opponentTotal) winner = "TEAM";
+            else if (teamTotal < opponentTotal) winner = "OPPONENT";
+          }
+          
+          return { key, teamTotal, opponentTotal, winner };
+        });
+        
+        console.log(`[Weekly Projections] Live score from ESPN: ${liveMatchupScore.teamCatsWon}-${liveMatchupScore.opponentCatsWon} (${liveMatchupScore.tied} tied)`);
+        console.log(`[Weekly Projections] Live categories:`, liveCategories.map(c => `${c.key}: ${c.teamTotal} vs ${c.opponentTotal} (${c.winner})`).join(', '));
+      } else if (matchupResults && matchupResults.categories) {
+        // Fallback to projections if no ESPN live stats available
+        liveCategories = matchupResults.categories.map(cat => ({
+          key: cat.key,
+          teamTotal: cat.teamTotal,
+          opponentTotal: cat.opponentTotal,
+          winner: cat.winner
+        }));
+        console.log(`[Weekly Projections] Using projected stats (no ESPN live data): ${liveMatchupScore.teamCatsWon}-${liveMatchupScore.opponentCatsWon}`);
+      }
+    }
+
     res.setHeader("Cache-Control", "public, max-age=60");
     return res.json({
       league: {
@@ -642,6 +720,8 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
       team: teamProjection,
       opponent: opponentProjection,
       matchup: matchupResults,
+      liveMatchupScore,
+      liveCategories,
     });
   } catch (err) {
     console.error("Error fetching weekly projections:", err);
@@ -3904,6 +3984,7 @@ app.post("/ingest/espn", async (_req, res) => {
   url.searchParams.append("view", "mStandings");
   url.searchParams.append("view", "mMatchupScore");
   url.searchParams.append("view", "mLiveScoring");
+  url.searchParams.append("view", "mBoxscore"); // Required for scoreByStat live category data
   url.searchParams.append("view", "mStatus");
   url.searchParams.set("platformVersion", platformVersion);
 
@@ -3985,6 +4066,17 @@ app.post("/ingest/espn", async (_req, res) => {
       const homeCumScore = matchup.home.cumulativeScore || {};
       const awayCumScore = matchup.away?.cumulativeScore || {};
 
+      // Extract live category stats from scoreByStat
+      // ESPN stat IDs: 0=PTS, 1=BLK, 2=STL, 3=AST, 6=REB, 11=TO, 17=3PM, 19=FG%, 20=FT%
+      const homeScoreByStat = homeCumScore.scoreByStat || {};
+      const awayScoreByStat = awayCumScore.scoreByStat || {};
+
+      // Debug: Log scoreByStat extraction
+      console.log(`[Ingestion] Team ${homeId} scoreByStat keys:`, Object.keys(homeScoreByStat));
+      if (Object.keys(homeScoreByStat).length > 0) {
+        console.log(`[Ingestion] Team ${homeId} PTS (0):`, homeScoreByStat["0"]?.score, `REB (6):`, homeScoreByStat["6"]?.score);
+      }
+
       matchupMap.set(homeId, {
         opponentTeamId: awayId,
         myCatsWon: homeCumScore.wins || 0,
@@ -3994,12 +4086,19 @@ app.post("/ingest/espn", async (_req, res) => {
         oppCatsLost: awayCumScore.losses || 0,
         oppCatsTied: awayCumScore.ties || 0,
         isHome: true,
+        // Live category stats from ESPN
+        myScoreByStat: homeScoreByStat,
+        oppScoreByStat: awayScoreByStat,
       });
     }
 
     if (awayId && matchup?.away) {
       const homeCumScore = matchup.home?.cumulativeScore || {};
       const awayCumScore = matchup.away.cumulativeScore || {};
+
+      // Extract live category stats from scoreByStat
+      const homeScoreByStat = homeCumScore.scoreByStat || {};
+      const awayScoreByStat = awayCumScore.scoreByStat || {};
 
       matchupMap.set(awayId, {
         opponentTeamId: homeId,
@@ -4010,6 +4109,9 @@ app.post("/ingest/espn", async (_req, res) => {
         oppCatsLost: homeCumScore.losses || 0,
         oppCatsTied: homeCumScore.ties || 0,
         isHome: false,
+        // Live category stats from ESPN
+        myScoreByStat: awayScoreByStat,
+        oppScoreByStat: homeScoreByStat,
       });
     }
   }
