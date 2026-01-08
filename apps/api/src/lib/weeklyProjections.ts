@@ -78,7 +78,7 @@ export async function calculateTeamWeeklyProjection(
   rosterSlots: Array<{
     meta: any;
     slotLabel: string | null;
-    player: { id: string; fullName: string; meta: any };
+    player: { id: string; fullName: string; meta: any; providerPlayerId?: string | null };
   }>,
   seasonYear: number | null,
   defaultGamesPerWeek: number,
@@ -189,6 +189,15 @@ export async function calculateTeamWeeklyProjection(
   // Calculate attempt-weighted percentages
   totals.fgPct = totalFga > 0 ? totalFgm / totalFga : 0;
   totals.ftPct = totalFta > 0 ? totalFtm / totalFta : 0;
+
+  // Runtime validation: Verify AST calculation matches expected sum
+  const expectedAst = playerProjections
+    .filter(p => p.hasStats && p.projectedGames > 0)
+    .reduce((sum, p) => sum + p.projTotals.ast, 0);
+  
+  if (Math.abs(totals.ast - expectedAst) > 0.01) {
+    console.warn(`[AST Validation] Mismatch detected: totals.ast=${totals.ast}, expected=${expectedAst}`);
+  }
 
   const totalsWithAttempts: NineCatTotalsWithAttempts = {
     ...totals,

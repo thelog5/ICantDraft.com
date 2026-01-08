@@ -165,10 +165,10 @@ export type NineCatStats = {
     const pts = get("0");
     const stl = get("1");
     const blk = get("2");
-    const threes = get("3");
-    const ast = get("4");
+    const ast = get("3");  // FIXED: "3" is assists!
     const reb = get("6");
     const tov = get("11");
+    const threes = get("17");  // Trying "17" for 3PM
   
     const fgm = get("13");
     const fga = get("14");

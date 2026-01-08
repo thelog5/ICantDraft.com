@@ -81,12 +81,6 @@ export default function TopNav({ children, onRefresh }: TopNavProps) {
               Streaming
             </Link>
             <Link
-              to="/pickups"
-              className={`topnav-tab ${isActive("/pickups") ? "active" : ""}`}
-            >
-              Pickups
-            </Link>
-            <Link
               to="/settings"
               className={`topnav-tab ${isActive("/settings") ? "active" : ""}`}
             >

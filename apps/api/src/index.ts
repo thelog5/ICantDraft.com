@@ -22,6 +22,7 @@ import {
   type WeeklyTeamProjection,
   type NineCatKey,
 } from "./lib/weeklyProjections.js";
+import { getCachedNBASchedule } from "./lib/nbaSchedule.js";
 import {
   computePlayerValue,
   calculatePTVPercentiles,
@@ -648,6 +649,2616 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
   }
 });
 
+// Free agents endpoint - returns only unowned players in the league
+app.get("/leagues/:leagueId/free-agents", async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const limit = parseInt(req.query.limit as string) || 200;
+  const search = (req.query.search as string) || "";
+  const positions = (req.query.positions as string) || "";
+  const includeQuestionable = req.query.includeQuestionable === "true";
+
+  try {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, name: true, seasonYear: true },
+    });
+    if (!league) return res.status(404).json({ error: "League not found" });
+
+    // Get all active roster slots in the league to determine owned players
+    const activeRosterSlots = await prisma.rosterSlot.findMany({
+      where: {
+        leagueId: league.id,
+        endAt: null,
+      },
+      select: {
+        playerId: true,
+      },
+    });
+
+    const ownedPlayerIds = new Set(activeRosterSlots.map((slot) => slot.playerId));
+
+    // Get all players in the league
+    const allPlayers = await prisma.player.findMany({
+      where: {
+        leagues: {
+          some: { id: leagueId },
+        },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        providerPlayerId: true,
+        fullName: true,
+        positions: true,
+        meta: true,
+      },
+    });
+
+    // Filter to free agents only
+    const freeAgents = allPlayers.filter((p) => !ownedPlayerIds.has(p.id));
+
+    // Apply search filter
+    const searchFiltered = search
+      ? freeAgents.filter((p) =>
+          p.fullName.toLowerCase().includes(search.toLowerCase())
+        )
+      : freeAgents;
+
+    // Apply position filter
+    const positionFiltered = positions
+      ? searchFiltered.filter((p) => {
+          const playerPositions = Array.isArray(p.positions) ? p.positions : [];
+          const requestedPositions = positions.split(",");
+          return requestedPositions.some((pos) => playerPositions.includes(pos));
+        })
+      : searchFiltered;
+
+    // Get scoring period info from first team's meta
+    const firstTeam = await prisma.team.findFirst({
+      where: { leagueId },
+      select: { meta: true },
+    });
+    const firstTeamMeta = (firstTeam?.meta as any) || {};
+    const defaultGamesPerWeek = 4;
+    const scoringPeriodStartDate = firstTeamMeta.scoringPeriodStartDate || null;
+    const scoringPeriodEndDate = firstTeamMeta.scoringPeriodEndDate || null;
+
+    // Process each free agent
+    type FreeAgentData = {
+      playerId: string;
+      providerPlayerId: string;
+      fullName: string;
+      positions: string[];
+      headshotUrl: string | null;
+      perGameStats: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        fgPct: number;
+        ftPct: number;
+        tov: number;
+      };
+      weeklyProjection: {
+        projectedGames: number;
+        totals: {
+          pts: number;
+          reb: number;
+          ast: number;
+          stl: number;
+          blk: number;
+          threes: number;
+          tov: number;
+          fgPct: number;
+          ftPct: number;
+        };
+        attempts: {
+          fga: number;
+          fgm: number;
+          fta: number;
+          ftm: number;
+        };
+      };
+      injuryStatus: string;
+      hasStats: boolean;
+    };
+
+    const processedFreeAgents: FreeAgentData[] = [];
+
+    for (const player of positionFiltered) {
+      const meta = (player.meta as any) || {};
+      const playerStats = extractNineCatFromPlayerMeta(meta, league.seasonYear);
+
+      if (!playerStats.hasStats) continue;
+
+      // Calculate injury info
+      const injuryInfo = extractInjuryInfo(meta, null);
+
+      // Filter by injury status
+      if (injuryInfo.status === "OUT" || injuryInfo.status === "IR") {
+        continue; // Always exclude OUT/IR
+      }
+
+      if (!includeQuestionable && (injuryInfo.status === "DTD" || injuryInfo.status === "SUSP")) {
+        continue; // Exclude DTD/SUSP unless explicitly requested
+      }
+
+      // Calculate projected games
+      const projectedGames = calculateProjectedGamesThisWeek(
+        defaultGamesPerWeek,
+        injuryInfo,
+        scoringPeriodStartDate || undefined,
+        scoringPeriodEndDate || undefined
+      );
+
+      if (projectedGames === 0) continue;
+
+      // Calculate weekly projection
+      const perGame = playerStats.perGame;
+      const totals = {
+        pts: perGame.pts * projectedGames,
+        reb: perGame.reb * projectedGames,
+        ast: perGame.ast * projectedGames,
+        stl: perGame.stl * projectedGames,
+        blk: perGame.blk * projectedGames,
+        threes: perGame.threes * projectedGames,
+        tov: perGame.tov * projectedGames,
+        fgPct: perGame.fgPct,
+        ftPct: perGame.ftPct,
+      };
+
+      // Calculate attempts
+      const fgaPerGame = playerStats.totals.fga / Math.max(1, playerStats.totals.gp);
+      const fgmPerGame = playerStats.totals.fgm / Math.max(1, playerStats.totals.gp);
+      const ftaPerGame = playerStats.totals.fta / Math.max(1, playerStats.totals.gp);
+      const ftmPerGame = playerStats.totals.ftm / Math.max(1, playerStats.totals.gp);
+
+      const attempts = {
+        fga: fgaPerGame * projectedGames,
+        fgm: fgmPerGame * projectedGames,
+        fta: ftaPerGame * projectedGames,
+        ftm: ftmPerGame * projectedGames,
+      };
+
+      // Generate headshot URL
+      const headshotUrl = player.providerPlayerId
+        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${player.providerPlayerId}.png`)
+        : null;
+
+      processedFreeAgents.push({
+        playerId: player.id,
+        providerPlayerId: player.providerPlayerId,
+        fullName: player.fullName,
+        positions: Array.isArray(player.positions) ? player.positions : [],
+        headshotUrl,
+        perGameStats: perGame,
+        weeklyProjection: {
+          projectedGames,
+          totals,
+          attempts,
+        },
+        injuryStatus: injuryInfo.status,
+        hasStats: playerStats.hasStats,
+      });
+    }
+
+    // Limit results
+    const limitedResults = processedFreeAgents.slice(0, limit);
+
+    res.setHeader("Cache-Control", "public, max-age=60");
+    return res.json({
+      league: {
+        id: league.id,
+        name: league.name,
+      },
+      freeAgents: limitedResults,
+      totalCount: processedFreeAgents.length,
+      returnedCount: limitedResults.length,
+    });
+  } catch (err) {
+    console.error("Error fetching free agents:", err);
+    return res.status(500).json({ error: "Failed to fetch free agents" });
+  }
+});
+
+// Helper: Extract player game schedule from ESPN meta
+// NBA Team Schedule mapping for 2024-25 season
+// This is a simplified version - in production, fetch from NBA API or maintain updated schedule
+const NBA_TEAM_SCHEDULES: Record<string, string[]> = {
+  // Format: YYYY-MM-DD dates when each team plays
+  // This should be populated from NBA schedule API or maintained
+  // For now, we'll use a fallback approach based on typical NBA schedule (3-4 games per week)
+};
+
+// Recommendation thresholds
+const MIN_DELTA_CAT_SCORE = 0.05; // Minimum 5% improvement in contested category
+const MIN_GAMES_NEXT_3_DAYS = 2; // Minimum games in next 3 days for volume streamers
+const MAX_RECS_PER_DAY = 2; // Maximum recommendations per day
+
+/**
+ * Calculate category closeness for matchup snapshot
+ */
+function calculateCategoryCloseness(
+  myTotal: number,
+  oppTotal: number,
+  categoryKey: NineCatKey,
+  maxValue: number
+): { 
+  closeness: "close" | "likely_win" | "likely_loss";
+  margin: number;
+  marginPct: number;
+  isFlippable: boolean;
+} {
+  const diff = myTotal - oppTotal;
+  const absDiff = Math.abs(diff);
+  const marginPct = absDiff / maxValue;
+
+  // For TO, lower is better
+  const isWinning = categoryKey === "tov" ? myTotal < oppTotal : myTotal > oppTotal;
+  
+  let closeness: "close" | "likely_win" | "likely_loss";
+  if (marginPct < 0.07) {
+    closeness = "close";
+  } else if (isWinning) {
+    closeness = "likely_win";
+  } else {
+    closeness = "likely_loss";
+  }
+
+  // A category is flippable if it's close or if we're losing by a small margin
+  const isFlippable = closeness === "close" || (closeness === "likely_loss" && marginPct < 0.15);
+
+  return {
+    closeness,
+    margin: diff,
+    marginPct,
+    isFlippable,
+  };
+}
+
+/**
+ * Helper to determine if a player's stat boosts a contested category
+ */
+function playerBoostsCategory(perGame: Record<NineCatKey, number>, cat: NineCatKey): boolean {
+  const value = perGame[cat];
+  if (typeof value !== 'number') return false;
+  
+  // Category-specific thresholds
+  switch (cat) {
+    case 'pts':
+      return value >= 12.0; // At least 12 PPG
+    case 'reb':
+      return value >= 5.0; // At least 5 RPG
+    case 'ast':
+      return value >= 3.0; // At least 3 APG
+    case 'stl':
+      return value >= 0.8; // At least 0.8 SPG
+    case 'blk':
+      return value >= 0.8; // At least 0.8 BPG
+    case 'threes':
+      return value >= 1.5; // At least 1.5 3PM per game
+    case 'fgPct':
+      return value >= 0.48; // At least 48% FG
+    case 'ftPct':
+      return value >= 0.78; // At least 78% FT
+    case 'tov':
+      return value <= 1.5; // Low turnovers (lower is better)
+    default:
+      return false;
+  }
+}
+
+/**
+ * Rank free agents for streaming adds
+ */
+function rankFreeAgentsForAdds(
+  freeAgents: Array<{
+    playerId: string;
+    name: string;
+    stats: ReturnType<typeof extractNineCatFromPlayerMeta>;
+    schedule: Date[];
+    gamesThisWeek: number;
+    injuryStatus: string;
+  }>,
+  contestedCategories: Array<{ key: NineCatKey; normalizedDelta: number }>,
+  targetDate?: Date
+): Array<{
+  player: typeof freeAgents[0];
+  score: number;
+  boosts: NineCatKey[];
+  strengths: NineCatKey[];
+  weaknesses: NineCatKey[];
+  reason: string;
+  fitScore: number;
+}> {
+  const ranked = freeAgents
+    .map((player) => {
+      if (!player.stats.hasStats) return null;
+      
+      const perGame = player.stats.perGame;
+      
+      // Calculate score based on contested categories
+      let contestedScore = 0;
+      const boosts: NineCatKey[] = [];
+      
+      for (const cat of contestedCategories) {
+        if (playerBoostsCategory(perGame, cat.key)) {
+          // Weight by how contested the category is (smaller normalizedDelta = more important)
+          const weight = 1 / (cat.normalizedDelta + 0.01);
+          const contribution = perGame[cat.key];
+          contestedScore += Math.abs(contribution) * weight;
+          boosts.push(cat.key);
+        }
+      }
+
+      // Calculate overall value score
+      const valueScore =
+        perGame.pts * 1.0 +
+        perGame.reb * 1.2 +
+        perGame.ast * 1.5 +
+        perGame.stl * 3.0 +
+        perGame.blk * 3.0 +
+        perGame.threes * 2.0 +
+        (perGame.fgPct > 0.45 ? 5 : 0) +
+        (perGame.ftPct > 0.75 ? 3 : 0) -
+        perGame.tov * 1.5;
+
+      // Identify strengths (top 3 categories)
+      const catValues: Array<{ key: NineCatKey; value: number }> = [
+        { key: "pts", value: perGame.pts },
+        { key: "reb", value: perGame.reb * 2 }, // Weight rebounds higher
+        { key: "ast", value: perGame.ast * 2.5 },
+        { key: "stl", value: perGame.stl * 5 },
+        { key: "blk", value: perGame.blk * 5 },
+        { key: "threes", value: perGame.threes * 3 },
+      ];
+      catValues.sort((a, b) => b.value - a.value);
+      const strengths = catValues.slice(0, 3).map((c) => c.key);
+
+      // Identify weaknesses
+      const weaknesses: NineCatKey[] = [];
+      if (perGame.tov > 2.0) weaknesses.push("tov");
+      if (perGame.fgPct < 0.42) weaknesses.push("fgPct");
+      if (perGame.ftPct < 0.70) weaknesses.push("ftPct");
+
+      // Combined score: 60% contested categories + 40% overall value
+      const finalScore = contestedScore * 0.6 + valueScore * 0.4;
+
+      // Fit score (0-100) based on how many contested cats they help
+      const fitScore = Math.min(100, (boosts.length / Math.max(1, contestedCategories.length)) * 100);
+
+      // Generate reason
+      let reason = "";
+      if (boosts.length > 0) {
+        reason = `Boosts ${boosts.slice(0, 2).join(", ")}`;
+      } else {
+        reason = `Volume streamer (${player.gamesThisWeek}g)`;
+      }
+
+      return {
+        player,
+        score: finalScore,
+        boosts: boosts.slice(0, 3),
+        strengths,
+        weaknesses,
+        reason,
+        fitScore,
+      };
+    })
+    .filter((r) => r !== null);
+
+  // Sort by score descending
+  ranked.sort((a, b) => b.score - a.score);
+
+  return ranked;
+}
+
+/**
+ * Rank roster players for drops
+ */
+function rankRosterForDrops(
+  roster: Array<{
+    playerId: string;
+    name: string;
+    stats: ReturnType<typeof extractNineCatFromPlayerMeta>;
+    schedule: Date[];
+    gamesRemaining: number;
+    isCore?: boolean;
+  }>,
+  leagueDist: ReturnType<typeof computeLeagueDistributions>,
+  currentDate: Date
+): Array<{
+  player: typeof roster[0];
+  dropScore: number; // Lower = better drop candidate
+  playerValue: number; // Overall PTV value
+  reason: string;
+  riskLevel: "low" | "medium" | "high";
+  nextGameDate: string | null;
+}> {
+  const ranked = roster
+    .map((player) => {
+      if (!player.stats.hasStats) return null;
+      if (player.isCore) return null; // Never drop core players
+
+      const perGame = player.stats.perGame;
+
+      // Calculate weighted stat total (simpler than z-scores)
+      // Weights based on fantasy value
+      const playerValue =
+        perGame.pts * 1.0 +     // Points: 1x weight
+        perGame.reb * 1.2 +     // Rebounds: 1.2x weight
+        perGame.ast * 1.5 +     // Assists: 1.5x weight
+        perGame.stl * 3.5 +     // Steals: 3.5x weight (scarce)
+        perGame.blk * 3.5 +     // Blocks: 3.5x weight (scarce)
+        perGame.threes * 2.0 +  // 3PM: 2x weight
+        (perGame.fgPct * 100) + // FG%: normalized to 0-100 range
+        (perGame.ftPct * 100) - // FT%: normalized to 0-100 range
+        (perGame.tov * 2.0);    // Turnovers: -2x weight (penalty)
+
+      // Check if player plays soon
+      const upcomingGames = player.schedule.filter((d) => d >= currentDate);
+      const nextGameDate = upcomingGames.length > 0 ? upcomingGames[0].toISOString().split('T')[0] : null;
+      const daysUntilNextGame = upcomingGames.length > 0 
+        ? Math.floor((upcomingGames[0].getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24))
+        : 999;
+
+      // Drop score: Simply use negative player value
+      // Lower dropScore = better drop candidate (lower value players)
+      let dropScore = -playerValue;
+      
+      // Slight adjustment for schedule (but keep it simple)
+      if (player.gamesRemaining === 0) {
+        dropScore -= 20; // Much easier to drop if no games left
+      } else if (daysUntilNextGame > 4) {
+        dropScore -= 5; // Easier to drop if not playing soon
+      }
+
+      // Generate reason based on VALUE
+      let reason = "";
+      const valuePerGame = playerValue.toFixed(1);
+      if (player.gamesRemaining === 0) {
+        reason = "No games remaining this week";
+      } else if (playerValue < 30) {
+        reason = `Lowest value on roster (${valuePerGame} pts/game value)`;
+      } else if (playerValue < 50) {
+        reason = `Below-average production (${valuePerGame})`;
+      } else if (playerValue < 70) {
+        reason = `Modest production (${valuePerGame})`;
+      } else {
+        reason = `Limited upside (${valuePerGame})`;
+      }
+
+      // Deprecated risk level (keeping for backward compatibility)
+      let riskLevel: "low" | "medium" | "high" = "low";
+
+      return {
+        player,
+        dropScore,
+        playerValue,
+        reason,
+        riskLevel,
+        nextGameDate,
+      };
+    })
+    .filter((r) => r !== null);
+
+  // Sort by dropScore ascending (lower = better drop candidate)
+  ranked.sort((a, b) => a.dropScore - b.dropScore);
+
+  // Exclude top 3 players by value as guardrail
+  const sortedByValue = [...ranked].sort((a, b) => b.playerValue - a.playerValue);
+  const top3Ids = new Set(sortedByValue.slice(0, 3).map(r => r.player.playerId));
+  
+  return ranked.filter(r => !top3Ids.has(r.player.playerId));
+}
+
+/**
+ * Extract player schedule - now uses proTeamId to look up NBA team schedules
+ * Note: NBA schedules are fetched separately and passed in via context
+ */
+function extractPlayerSchedule(
+  playerMeta: any, 
+  scoringPeriodStart: Date, 
+  scoringPeriodEnd: Date,
+  nbaSchedules?: Map<string, Date[]>
+): Date[] {
+  const gameDates: Date[] = [];
+  
+  // Normalize period dates to UTC midnight for consistent comparison
+  const periodStartUTC = new Date(Date.UTC(scoringPeriodStart.getFullYear(), scoringPeriodStart.getMonth(), scoringPeriodStart.getDate()));
+  const periodEndUTC = new Date(Date.UTC(scoringPeriodEnd.getFullYear(), scoringPeriodEnd.getMonth(), scoringPeriodEnd.getDate(), 23, 59, 59));
+  
+  // ESPN Fantasy API doesn't provide player game schedules
+  // We need to use proTeamId to look up the NBA team's schedule
+  const proTeamId = playerMeta?.proTeamId;
+  
+  if (!proTeamId || !nbaSchedules) {
+    return gameDates;
+  }
+  
+  // Map ESPN fantasy proTeamId to NBA team ID
+  const fantasyToNBAMap: Record<number, string> = {
+    1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10',
+    11: '11', 12: '12', 13: '13', 14: '14', 15: '15', 16: '16', 17: '17', 18: '18',
+    19: '19', 20: '20', 21: '21', 22: '22', 23: '23', 24: '24', 25: '25', 26: '26',
+    27: '27', 28: '28', 29: '29', 30: '30',
+  };
+  
+  const nbaTeamId = fantasyToNBAMap[proTeamId];
+  if (!nbaTeamId) {
+    return gameDates;
+  }
+  
+  // Get team schedule from NBA schedules map
+  const teamGames = nbaSchedules.get(nbaTeamId) || [];
+  
+  // Filter to scoring period
+  for (const gameDate of teamGames) {
+    const gameDateUTC = new Date(Date.UTC(gameDate.getFullYear(), gameDate.getMonth(), gameDate.getDate()));
+    
+    if (gameDateUTC >= periodStartUTC && gameDateUTC <= periodEndUTC) {
+      gameDates.push(gameDateUTC);
+    }
+  }
+  
+  return gameDates;
+}
+
+// Helper: Get acquisition limits from league
+async function getAcquisitionLimits(leagueId: string) {
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { settings: true },
+  });
+  
+  const settings = (league?.settings as any) || {};
+  const acquisitionLimit = typeof settings.acquisitionLimit === "number" ? settings.acquisitionLimit : null;
+  
+  // TODO: Get acquisitionsUsed from transactions table when implemented
+  // For now, return null and let frontend handle it
+  const acquisitionsUsed = typeof settings.acquisitionsUsed === "number" ? settings.acquisitionsUsed : null;
+  
+  return {
+    limit: acquisitionLimit,
+    used: acquisitionsUsed,
+    remaining: acquisitionLimit !== null && acquisitionsUsed !== null 
+      ? Math.max(0, acquisitionLimit - acquisitionsUsed)
+      : null,
+  };
+}
+
+// Unified Streaming Overview endpoint
+app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const teamId = req.query.teamId as string | undefined;
+
+  if (!teamId) {
+    return res.status(400).json({ 
+      status: "error",
+      errorCode: "MISSING_TEAM_ID",
+      message: "teamId query parameter required"
+    });
+  }
+
+  try {
+    console.log(`[Streaming Overview] leagueId=${leagueId}, teamId=${teamId}`);
+
+    // Fetch league
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, name: true, seasonYear: true, settings: true },
+    });
+    
+    if (!league) {
+      return res.status(404).json({ 
+        status: "error",
+        errorCode: "LEAGUE_NOT_FOUND",
+        message: "League not found"
+      });
+    }
+
+    console.log(`[Streaming Overview] Found league: ${league.name}, season: ${league.seasonYear}`);
+
+    // Get scoring period info
+    const firstTeam = await prisma.team.findFirst({
+      where: { leagueId },
+      select: { meta: true },
+    });
+    const firstTeamMeta = (firstTeam?.meta as any) || {};
+    const scoringPeriodStartDate = firstTeamMeta.scoringPeriodStartDate 
+      ? new Date(firstTeamMeta.scoringPeriodStartDate)
+      : new Date();
+    const scoringPeriodEndDate = firstTeamMeta.scoringPeriodEndDate
+      ? new Date(firstTeamMeta.scoringPeriodEndDate)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    console.log(`[Streaming Overview] Scoring period: ${scoringPeriodStartDate.toISOString()} to ${scoringPeriodEndDate.toISOString()}`);
+
+    // Get acquisition limits
+    const acquisitionLimits = await getAcquisitionLimits(leagueId);
+    console.log(`[Streaming Overview] Acquisition limits:`, acquisitionLimits);
+
+    // Get team and opponent
+    const team = await prisma.team.findFirst({
+      where: { id: teamId, leagueId },
+      select: {
+        id: true,
+        name: true,
+        meta: true,
+        rosterSlots: {
+          where: { endAt: null },
+          select: {
+            meta: true,
+            slotLabel: true,
+            player: { 
+              select: { 
+                id: true, 
+                fullName: true, 
+                positions: true,
+                meta: true, 
+                providerPlayerId: true 
+              } 
+            },
+          },
+        },
+      },
+    });
+
+    if (!team) {
+      return res.status(404).json({ 
+        status: "error",
+        errorCode: "TEAM_NOT_FOUND",
+        message: "Team not found"
+      });
+    }
+
+    // Get opponent from weekly projection
+    const defaultGamesPerWeek = 4;
+    const myProjection = await calculateTeamWeeklyProjection(
+      team.rosterSlots,
+      league.seasonYear,
+      defaultGamesPerWeek,
+      scoringPeriodStartDate.toISOString(),
+      scoringPeriodEndDate.toISOString()
+    );
+
+    // Try to find opponent
+    const teamMeta = (team.meta as any) || {};
+    const opponentTeamId = teamMeta.currentOpponentId;
+    let opponent = null;
+    let oppProjection: { totals: NineCatTotals; totalsWithAttempts: any; players: any[] } | null = null;
+
+    if (opponentTeamId) {
+      opponent = await prisma.team.findFirst({
+        where: { id: opponentTeamId, leagueId },
+        select: {
+          id: true,
+          name: true,
+          rosterSlots: {
+            where: { endAt: null },
+            select: {
+              meta: true,
+              slotLabel: true,
+              player: { 
+                select: { 
+                  id: true, 
+                  fullName: true, 
+                  positions: true,
+                  meta: true, 
+                  providerPlayerId: true 
+                } 
+              },
+            },
+          },
+        },
+      });
+
+      if (opponent) {
+        oppProjection = await calculateTeamWeeklyProjection(
+          opponent.rosterSlots,
+          league.seasonYear,
+          defaultGamesPerWeek,
+          scoringPeriodStartDate.toISOString(),
+          scoringPeriodEndDate.toISOString()
+        );
+      }
+    }
+
+    // Determine contested categories
+    const contestedCategories: NineCatKey[] = [];
+    if (oppProjection) {
+      const categoryLabels: Record<NineCatKey, string> = {
+        pts: "PTS", reb: "REB", ast: "AST", stl: "STL", blk: "BLK",
+        threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
+      };
+
+      const categoryKeys: NineCatKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
+      
+      const myTotals = myProjection.totals;
+      const oppTotals = oppProjection.totals;
+      
+      const maxValues: Record<NineCatKey, number> = {
+        pts: Math.max(myTotals.pts, oppTotals.pts, 100),
+        reb: Math.max(myTotals.reb, oppTotals.reb, 50),
+        ast: Math.max(myTotals.ast, oppTotals.ast, 50),
+        stl: Math.max(myTotals.stl, oppTotals.stl, 10),
+        blk: Math.max(myTotals.blk, oppTotals.blk, 10),
+        threes: Math.max(myTotals.threes, oppTotals.threes, 30),
+        fgPct: 1,
+        ftPct: 1,
+        tov: Math.max(myTotals.tov, oppTotals.tov, 30),
+      };
+
+      const deltas = categoryKeys.map((key) => ({
+        key,
+        label: categoryLabels[key],
+        absDelta: Math.abs(myTotals[key] - oppTotals[key]),
+        normalizedDelta: Math.abs(myTotals[key] - oppTotals[key]) / maxValues[key],
+      }));
+
+      deltas.sort((a, b) => a.normalizedDelta - b.normalizedDelta);
+      const topContested = deltas.slice(0, 4);
+      contestedCategories.push(...topContested.map((d) => d.key));
+    }
+
+    console.log(`[Streaming Overview] Contested categories:`, contestedCategories);
+
+    // Get ALL free agents (not rostered by anyone)
+    const activeRosterSlots = await prisma.rosterSlot.findMany({
+      where: { leagueId: league.id, endAt: null },
+      select: { playerId: true },
+    });
+    const ownedPlayerIds = new Set(activeRosterSlots.map((slot) => slot.playerId));
+
+    console.log(`[Streaming Overview] Found ${ownedPlayerIds.size} rostered players`);
+
+    const allPlayers = await prisma.player.findMany({
+      where: {
+        leagues: { some: { id: leagueId } },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        providerPlayerId: true,
+        fullName: true,
+        positions: true,
+        meta: true,
+      },
+    });
+
+    console.log(`[Streaming Overview] Found ${allPlayers.length} total players in league`);
+
+    const freeAgents = allPlayers.filter((p) => !ownedPlayerIds.has(p.id));
+    console.log(`[Streaming Overview] Found ${freeAgents.length} free agents`);
+
+    // Fetch NBA schedules for the scoring period
+    const nbaSchedules = await getCachedNBASchedule(scoringPeriodStartDate, scoringPeriodEndDate);
+    console.log(`[Streaming Overview] Loaded NBA schedules for ${nbaSchedules.size} teams`);
+
+    // Process free agents with stats and schedule
+    const freeAgentsWithData = freeAgents
+      .map((p) => {
+        const stats = extractNineCatFromPlayerMeta(p.meta as any, league.seasonYear);
+        if (!stats.hasStats) return null;
+
+        const injuryInfo = extractInjuryInfo(p.meta as any, null);
+        if (injuryInfo.status === "OUT" || injuryInfo.status === "IR") return null;
+
+        const schedule = extractPlayerSchedule(p.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+        const gamesThisWeek = schedule.length;
+
+        if (gamesThisWeek === 0) return null;
+
+        // Calculate projected totals
+        const projectedTotals = {
+          pts: stats.perGame.pts * gamesThisWeek,
+          reb: stats.perGame.reb * gamesThisWeek,
+          ast: stats.perGame.ast * gamesThisWeek,
+          stl: stats.perGame.stl * gamesThisWeek,
+          blk: stats.perGame.blk * gamesThisWeek,
+          threes: stats.perGame.threes * gamesThisWeek,
+          tov: stats.perGame.tov * gamesThisWeek,
+          fgPct: stats.perGame.fgPct,
+          ftPct: stats.perGame.ftPct,
+        };
+
+        // Determine which contested categories this player boosts
+        const boosts: NineCatKey[] = [];
+        for (const cat of contestedCategories) {
+          if (playerBoostsCategory(stats.perGame, cat)) {
+            boosts.push(cat);
+          }
+        }
+
+        // Calculate fit score
+        const fitScore = contestedCategories.length > 0
+          ? Math.round((boosts.length / contestedCategories.length) * 100)
+          : 0;
+
+        // Map schedule to gamesByDay
+        const gamesByDay: Record<string, boolean> = {};
+        for (const gameDate of schedule) {
+          const dateKey = gameDate.toISOString().split('T')[0];
+          gamesByDay[dateKey] = true;
+        }
+
+        // Create human-readable schedule text
+        const scheduleText = schedule.length > 0
+          ? schedule
+              .map((d) => d.toLocaleDateString('en-US', { weekday: 'short' }))
+              .join(', ')
+          : 'No games';
+
+        return {
+          playerId: p.id,
+          name: p.fullName,
+          teamAbbr: (p.meta as any)?.proTeamAbbr || "FA",
+          headshotUrl: p.providerPlayerId
+            ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${p.providerPlayerId}.png`)
+            : null,
+          gamesThisWeek,
+          gamesByDay,
+          scheduleText,
+          projectedTotals,
+          projectedPerGame: stats.perGame,
+          boosts,
+          fitScore,
+        };
+      })
+      .filter((p) => p !== null);
+
+    console.log(`[Streaming Overview] Processed ${freeAgentsWithData.length} free agents with stats`);
+
+    // Build matchup snapshot
+    let matchupSnapshot = null;
+    if (oppProjection) {
+      const categoryLabels: Record<NineCatKey, string> = {
+        pts: "PTS", reb: "REB", ast: "AST", stl: "STL", blk: "BLK",
+        threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
+      };
+      const categoryKeys: NineCatKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
+      const myTotals = myProjection.totals;
+      const oppTotals = oppProjection.totals;
+      const maxValues: Record<NineCatKey, number> = {
+        pts: Math.max(myTotals.pts, oppTotals.pts, 100),
+        reb: Math.max(myTotals.reb, oppTotals.reb, 50),
+        ast: Math.max(myTotals.ast, oppTotals.ast, 50),
+        stl: Math.max(myTotals.stl, oppTotals.stl, 10),
+        blk: Math.max(myTotals.blk, oppTotals.blk, 10),
+        threes: Math.max(myTotals.threes, oppTotals.threes, 30),
+        fgPct: 1,
+        ftPct: 1,
+        tov: Math.max(myTotals.tov, oppTotals.tov, 30),
+      };
+
+      const matchupResult = calculateMatchupResults(myTotals, oppTotals);
+      const categories = categoryKeys.map((key) => {
+        const closenessData = calculateCategoryCloseness(myTotals[key], oppTotals[key], key, maxValues[key]);
+        return {
+          key,
+          label: categoryLabels[key],
+          myTotal: myTotals[key],
+          oppTotal: oppTotals[key],
+          ...closenessData,
+        };
+      });
+
+      matchupSnapshot = {
+        projectedScore: {
+          wins: matchupResult.projectedScore.teamCatsWon,
+          losses: matchupResult.projectedScore.opponentCatsWon,
+          ties: matchupResult.projectedScore.tied,
+        },
+        categories,
+        closeCategories: categories.filter((c) => c.closeness === "close"),
+        flippableCategories: categories.filter((c) => c.isFlippable),
+      };
+    }
+
+    // Rank free agents and roster for recommendations
+    const currentDate = new Date();
+    const contestedCategoriesForRanking = contestedCategories.map((key) => ({
+      key,
+      normalizedDelta: matchupSnapshot?.categories.find((c) => c.key === key)?.marginPct || 0.1,
+    }));
+
+    const freeAgentsForRanking = freeAgents.map((p) => {
+      const stats = extractNineCatFromPlayerMeta(p.meta as any, league.seasonYear);
+      const schedule = extractPlayerSchedule(p.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+      const injuryInfo = extractInjuryInfo(p.meta as any, null);
+      return {
+        playerId: p.id,
+        name: p.fullName,
+        stats,
+        schedule,
+        gamesThisWeek: schedule.length,
+        injuryStatus: injuryInfo.status,
+      };
+    }).filter((p) => p.stats.hasStats && p.injuryStatus !== "OUT" && p.injuryStatus !== "IR" && p.gamesThisWeek > 0);
+
+    const rankedFreeAgents = rankFreeAgentsForAdds(freeAgentsForRanking, contestedCategoriesForRanking, currentDate);
+
+    const rosterForRanking = team.rosterSlots.map((slot) => {
+      const stats = extractNineCatFromPlayerMeta(slot.player.meta as any, league.seasonYear);
+      const schedule = extractPlayerSchedule(slot.player.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+      return {
+        playerId: slot.player.id,
+        name: slot.player.fullName,
+        stats,
+        schedule,
+        gamesRemaining: schedule.length,
+        isCore: false, // TODO: integrate with core player detection
+      };
+    }).filter((p) => p.stats.hasStats);
+
+    // Compute league distributions for value-based drop ranking
+    const allTeams = await prisma.team.findMany({
+      where: { leagueId },
+      select: {
+        id: true,
+        name: true,
+        rosterSlots: {
+          where: { endAt: null },
+          select: {
+            meta: true,
+            player: { select: { id: true, fullName: true, meta: true } },
+          },
+        },
+      },
+    });
+    
+    // Compute team totals for league distribution
+    const teamsTotals: TeamTotals[] = [];
+    for (const t of allTeams) {
+      // Filter out IR players
+      const activeRosterSlots = t.rosterSlots.filter((slot) => {
+        const slotMeta = (slot.meta as any) || {};
+        const isIR = slotMeta.isIR === true || 
+          slotMeta.status === "IR" || 
+          slotMeta.status === "IL" || 
+          slotMeta.status === "OUT";
+        return !isIR;
+      });
+      
+      const playerStats = activeRosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
+      const totals = aggregateTeam(playerStats);
+      teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
+    }
+    
+    const leagueDist = computeLeagueDistributions(teamsTotals);
+
+    const rankedDrops = rankRosterForDrops(rosterForRanking, leagueDist, currentDate);
+
+    // Generate daily recommendations
+    const dates: Date[] = [];
+    for (let d = new Date(scoringPeriodStartDate); d <= scoringPeriodEndDate; d.setDate(d.getDate() + 1)) {
+      dates.push(new Date(d));
+    }
+
+    const dailyRecommendations = dates.map((date, dayIndex) => {
+      const dateKey = date.toISOString().split('T')[0];
+      const dayLabel = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+      // Find free agents playing on this date (use ISO date string for comparison)
+      const freeAgentsPlayingToday = rankedFreeAgents.filter((r) => {
+        const playsToday = r.player.schedule.some((gameDate) => {
+          const gameDateKey = gameDate.toISOString().split('T')[0];
+          return gameDateKey === dateKey;
+        });
+        return playsToday;
+      });
+      
+      // Debug logging for day filtering
+      if (dayIndex <= 2) {
+        console.log(`[Day ${dayIndex}] ${dayLabel} (${dateKey}):`, {
+          totalFreeAgents: rankedFreeAgents.length,
+          playingToday: freeAgentsPlayingToday.length,
+          examplePlayers: freeAgentsPlayingToday.slice(0, 3).map(r => ({
+            name: r.player.name,
+            schedule: r.player.schedule.map(d => d.toISOString().split('T')[0])
+          }))
+        });
+      }
+
+      // Generate recommendations (date-aware filtering)
+      const recommendations: any[] = [];
+      
+      if (freeAgentsPlayingToday.length > 0 && rankedDrops.length > 0) {
+        // Recommend top adds for this date
+        // For day 0 (today), show more recs; for future days, show fewer
+        const maxRecs = dayIndex === 0 ? MAX_RECS_PER_DAY : Math.min(2, MAX_RECS_PER_DAY);
+        const topAdds = freeAgentsPlayingToday.slice(0, maxRecs);
+        
+        // Find drops who DON'T play today (prefer to drop inactive players)
+        const dropsNotPlayingToday = rankedDrops.filter((d) => {
+          const playsToday = d.player.schedule.some((gameDate) => {
+            const gameDateKey = gameDate.toISOString().split('T')[0];
+            return gameDateKey === dateKey;
+          });
+          return !playsToday;
+        });
+        const dropCandidatesForDay = dropsNotPlayingToday.length > 0 ? dropsNotPlayingToday : rankedDrops;
+        
+        for (const addRec of topAdds) {
+          const bestDrop = dropCandidatesForDay[0]; // Suggest best drop who doesn't play today
+          
+          recommendations.push({
+            addPlayerId: addRec.player.playerId,
+            addPlayerName: addRec.player.name,
+            addReason: addRec.reason,
+            addBoosts: addRec.boosts,
+            addFitScore: addRec.fitScore,
+            dropPlayerId: bestDrop.player.playerId,
+            dropPlayerName: bestDrop.player.name,
+            dropReason: bestDrop.reason,
+            dropRiskLevel: bestDrop.riskLevel,
+            mode: addRec.boosts.length > 0 ? "strict" : "opportunity",
+          });
+        }
+      }
+
+      // Count games (use ISO date string for comparison)
+      const youGames = team.rosterSlots.filter((slot) => {
+        const schedule = extractPlayerSchedule(slot.player.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+        return schedule.some((gameDate) => {
+          const gameDateKey = gameDate.toISOString().split('T')[0];
+          return gameDateKey === dateKey;
+        });
+      }).length;
+
+      const oppGames = opponent
+        ? opponent.rosterSlots.filter((slot) => {
+            const schedule = extractPlayerSchedule(slot.player.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+            return schedule.some((gameDate) => {
+              const gameDateKey = gameDate.toISOString().split('T')[0];
+              return gameDateKey === dateKey;
+            });
+          }).length
+        : 0;
+
+      const noRecommendationReason = 
+        recommendations.length > 0 ? null :
+        freeAgentsPlayingToday.length === 0 ? "No free agents play today" :
+        rankedDrops.length === 0 ? "No safe drop candidates" :
+        dayIndex > 0 ? "Focus on today's recommendations first" :
+        "No high-impact adds available";
+
+      return {
+        dateISO: dateKey,
+        label: dayLabel,
+        youGames,
+        oppGames,
+        freeAgentsPlayingCount: freeAgentsPlayingToday.length,
+        recommendations,
+        noRecommendationReason,
+      };
+    });
+
+    // Enhanced free agents with rankings
+    const enhancedFreeAgents = rankedFreeAgents.slice(0, 50).map((r) => {
+      const playerData = freeAgentsWithData.find((fa) => fa.playerId === r.player.playerId);
+      return {
+        ...playerData,
+        score: r.score,
+        fitScore: r.fitScore,
+        strengths: r.strengths,
+        weaknesses: r.weaknesses,
+        reason: r.reason,
+      };
+    });
+
+    // Drop candidates
+    const dropCandidates = rankedDrops.slice(0, 5).map((r) => ({
+      playerId: r.player.playerId,
+      name: r.player.name,
+      gamesRemaining: r.player.gamesRemaining,
+      nextGameDate: r.nextGameDate,
+      reason: r.reason,
+      riskLevel: r.riskLevel,
+      perGame: r.player.stats.perGame,
+    }));
+
+    res.setHeader("Cache-Control", "public, max-age=180");
+    return res.json({
+      status: "ok",
+      meta: {
+        weekId: (firstTeamMeta.matchupPeriodId as number) || 1,
+        scoringPeriodId: (firstTeamMeta.scoringPeriodId as number) || 1,
+        startDateISO: scoringPeriodStartDate.toISOString().split('T')[0],
+        endDateISO: scoringPeriodEndDate.toISOString().split('T')[0],
+        addsLimit: acquisitionLimits.limit,
+        addsUsed: acquisitionLimits.used,
+        addsRemaining: acquisitionLimits.remaining,
+      },
+      matchupSnapshot,
+      targets: {
+        contestedCats: contestedCategories,
+        recommendedCats: contestedCategories,
+      },
+      dailyRecommendations,
+      freeAgents: enhancedFreeAgents,
+      dropCandidates,
+      roster: team.rosterSlots.map((slot) => {
+        const schedule = extractPlayerSchedule(slot.player.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+        const gamesByDay: Record<string, boolean> = {};
+        for (const gameDate of schedule) {
+          const dateKey = gameDate.toISOString().split('T')[0];
+          gamesByDay[dateKey] = true;
+        }
+
+        const stats = extractNineCatFromPlayerMeta(slot.player.meta as any, league.seasonYear);
+        const gamesThisWeek = schedule.length;
+
+        return {
+          playerId: slot.player.id,
+          name: slot.player.fullName,
+          teamAbbr: (slot.player.meta as any)?.proTeamAbbr || "N/A",
+          headshotUrl: slot.player.providerPlayerId
+            ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${slot.player.providerPlayerId}.png`)
+            : null,
+          gamesByDay,
+          gamesRemaining: gamesThisWeek,
+          projectedTotals: {
+            pts: stats.perGame.pts * gamesThisWeek,
+            reb: stats.perGame.reb * gamesThisWeek,
+            ast: stats.perGame.ast * gamesThisWeek,
+            stl: stats.perGame.stl * gamesThisWeek,
+            blk: stats.perGame.blk * gamesThisWeek,
+            threes: stats.perGame.threes * gamesThisWeek,
+            tov: stats.perGame.tov * gamesThisWeek,
+            fgPct: stats.perGame.fgPct,
+            ftPct: stats.perGame.ftPct,
+          },
+          perGame: stats.perGame,
+        };
+      }),
+    });
+  } catch (err) {
+    console.error("[Streaming Overview] Error:", err);
+    return res.status(500).json({ 
+      status: "error",
+      errorCode: "INTERNAL_ERROR",
+      message: "Failed to generate streaming overview",
+      details: err instanceof Error ? err.message : String(err)
+    });
+  }
+});
+
+// Streaming impact calculation endpoint
+app.post("/leagues/:leagueId/streaming/impact", async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const { teamId, opponentTeamId, addPlayerId, dropPlayerId } = req.body;
+
+  if (!teamId || !addPlayerId || !dropPlayerId) {
+    return res.status(400).json({
+      status: "error",
+      message: "teamId, addPlayerId, and dropPlayerId are required"
+    });
+  }
+
+  try {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, name: true, seasonYear: true },
+    });
+    if (!league) {
+      return res.status(404).json({ status: "error", message: "League not found" });
+    }
+
+    // Get scoring period
+    const firstTeam = await prisma.team.findFirst({
+      where: { leagueId },
+      select: { meta: true },
+    });
+    const firstTeamMeta = (firstTeam?.meta as any) || {};
+    const scoringPeriodStartDate = firstTeamMeta.scoringPeriodStartDate 
+      ? new Date(firstTeamMeta.scoringPeriodStartDate)
+      : new Date();
+    const scoringPeriodEndDate = firstTeamMeta.scoringPeriodEndDate
+      ? new Date(firstTeamMeta.scoringPeriodEndDate)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    // Get team roster
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: {
+        rosterSlots: {
+          where: { endAt: null },
+          select: {
+            meta: true,
+            slotLabel: true,
+            player: { select: { id: true, fullName: true, meta: true, providerPlayerId: true } },
+          },
+        },
+      },
+    });
+    if (!team) {
+      return res.status(404).json({ status: "error", message: "Team not found" });
+    }
+
+    // Get add player
+    const addPlayer = await prisma.player.findUnique({
+      where: { id: addPlayerId },
+      select: { id: true, fullName: true, meta: true, providerPlayerId: true },
+    });
+    if (!addPlayer) {
+      return res.status(404).json({ status: "error", message: "Add player not found" });
+    }
+
+    // Calculate BEFORE projection
+    const defaultGamesPerWeek = 4;
+    const beforeProjection = await calculateTeamWeeklyProjection(
+      team.rosterSlots,
+      league.seasonYear,
+      defaultGamesPerWeek,
+      scoringPeriodStartDate.toISOString(),
+      scoringPeriodEndDate.toISOString()
+    );
+
+    // Calculate AFTER projection (remove drop, add new player)
+    const modifiedRoster = team.rosterSlots
+      .filter(slot => slot.player.id !== dropPlayerId)
+      .concat([{
+        meta: {},
+        slotLabel: "UTIL",
+        player: addPlayer,
+      }]);
+
+    const afterProjection = await calculateTeamWeeklyProjection(
+      modifiedRoster as any,
+      league.seasonYear,
+      defaultGamesPerWeek,
+      scoringPeriodStartDate.toISOString(),
+      scoringPeriodEndDate.toISOString()
+    );
+
+    // Calculate deltas
+    const categoryKeys: NineCatKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
+    const deltas: Record<NineCatKey, number> = {} as any;
+    for (const key of categoryKeys) {
+      if (key === "fgPct" || key === "ftPct") {
+        deltas[key] = afterProjection.totals[key] - beforeProjection.totals[key];
+      } else {
+        deltas[key] = afterProjection.totals[key] - beforeProjection.totals[key];
+      }
+    }
+
+    // Get opponent projection if available
+    let matchupResultBefore = null;
+    let matchupResultAfter = null;
+    if (opponentTeamId) {
+      const opponent = await prisma.team.findUnique({
+        where: { id: opponentTeamId },
+        select: {
+          rosterSlots: {
+            where: { endAt: null },
+            select: {
+              meta: true,
+              slotLabel: true,
+              player: { select: { id: true, fullName: true, meta: true, providerPlayerId: true } },
+            },
+          },
+        },
+      });
+
+      if (opponent) {
+        const oppProjection = await calculateTeamWeeklyProjection(
+          opponent.rosterSlots,
+          league.seasonYear,
+          defaultGamesPerWeek,
+          scoringPeriodStartDate.toISOString(),
+          scoringPeriodEndDate.toISOString()
+        );
+
+        matchupResultBefore = calculateMatchupResults(beforeProjection.totals, oppProjection.totals);
+        matchupResultAfter = calculateMatchupResults(afterProjection.totals, oppProjection.totals);
+      }
+    }
+
+    res.setHeader("Cache-Control", "no-cache");
+    return res.json({
+      status: "ok",
+      before: beforeProjection.totals,
+      after: afterProjection.totals,
+      deltas,
+      matchupResultBefore: matchupResultBefore ? {
+        wins: matchupResultBefore.projectedScore.teamCatsWon,
+        losses: matchupResultBefore.projectedScore.opponentCatsWon,
+        ties: matchupResultBefore.projectedScore.tied,
+      } : null,
+      matchupResultAfter: matchupResultAfter ? {
+        wins: matchupResultAfter.projectedScore.teamCatsWon,
+        losses: matchupResultAfter.projectedScore.opponentCatsWon,
+        ties: matchupResultAfter.projectedScore.tied,
+      } : null,
+    });
+  } catch (err) {
+    console.error("[Streaming Impact] Error:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to calculate impact",
+      details: err instanceof Error ? err.message : String(err)
+    });
+  }
+});
+
+// Streaming schedule endpoint - day-by-day schedule with players
+app.get("/leagues/:leagueId/streaming/schedule", async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const teamId = req.query.teamId as string | undefined;
+  const opponentTeamId = req.query.opponentTeamId as string | undefined;
+
+  if (!teamId) {
+    return res.status(400).json({ error: "teamId query parameter required" });
+  }
+
+  try {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, name: true, seasonYear: true, settings: true },
+    });
+    if (!league) return res.status(404).json({ error: "League not found" });
+
+    // Get scoring period info
+    const firstTeam = await prisma.team.findFirst({
+      where: { leagueId },
+      select: { meta: true },
+    });
+    const firstTeamMeta = (firstTeam?.meta as any) || {};
+    const scoringPeriodStartDate = firstTeamMeta.scoringPeriodStartDate 
+      ? new Date(firstTeamMeta.scoringPeriodStartDate)
+      : new Date();
+    const scoringPeriodEndDate = firstTeamMeta.scoringPeriodEndDate
+      ? new Date(firstTeamMeta.scoringPeriodEndDate)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    // Get team roster
+    const team = await prisma.team.findFirst({
+      where: { id: teamId, leagueId },
+      select: {
+        id: true,
+        name: true,
+        rosterSlots: {
+          where: { endAt: null },
+          select: {
+            meta: true,
+            slotLabel: true,
+            player: { 
+              select: { 
+                id: true, 
+                fullName: true, 
+                positions: true,
+                meta: true, 
+                providerPlayerId: true 
+              } 
+            },
+          },
+        },
+      },
+    });
+    if (!team) return res.status(404).json({ error: "Team not found" });
+
+    // Get opponent roster
+    let opponent = null;
+    if (opponentTeamId) {
+      opponent = await prisma.team.findFirst({
+        where: { id: opponentTeamId, leagueId },
+        select: {
+          id: true,
+          name: true,
+          rosterSlots: {
+            where: { endAt: null },
+            select: {
+              meta: true,
+              slotLabel: true,
+              player: { 
+                select: { 
+                  id: true, 
+                  fullName: true, 
+                  positions: true,
+                  meta: true, 
+                  providerPlayerId: true 
+                } 
+              },
+            },
+          },
+        },
+      });
+    }
+
+    // Get all free agents
+    const activeRosterSlots = await prisma.rosterSlot.findMany({
+      where: { leagueId: league.id, endAt: null },
+      select: { playerId: true },
+    });
+    const ownedPlayerIds = new Set(activeRosterSlots.map((slot) => slot.playerId));
+
+    const allPlayers = await prisma.player.findMany({
+      where: {
+        leagues: { some: { id: leagueId } },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        providerPlayerId: true,
+        fullName: true,
+        positions: true,
+        meta: true,
+      },
+    });
+
+    const freeAgents = allPlayers.filter((p) => !ownedPlayerIds.has(p.id));
+
+    // Fetch NBA schedules for the scoring period
+    const nbaSchedules = await getCachedNBASchedule(scoringPeriodStartDate, scoringPeriodEndDate);
+    console.log(`[Streaming Schedule] Loaded NBA schedules for ${nbaSchedules.size} teams`);
+
+    // Build day-by-day schedule
+    const dates: Date[] = [];
+    for (let d = new Date(scoringPeriodStartDate); d <= scoringPeriodEndDate; d.setDate(d.getDate() + 1)) {
+      dates.push(new Date(d));
+    }
+
+    const days = dates.map((date) => {
+      const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'short' });
+      
+      // My players playing today
+      const myPlayersPlaying = team.rosterSlots
+        .filter((slot) => {
+          const schedule = extractPlayerSchedule(slot.player.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+          return schedule.some((gameDate) => gameDate.toDateString() === date.toDateString());
+        })
+        .map((slot) => ({
+          playerId: slot.player.id,
+          name: slot.player.fullName,
+          headshotUrl: slot.player.providerPlayerId
+            ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${slot.player.providerPlayerId}.png`)
+            : null,
+          positions: slot.player.positions,
+        }));
+
+      // Opponent players playing today
+      const oppPlayersPlaying = opponent
+        ? opponent.rosterSlots
+            .filter((slot) => {
+              const schedule = extractPlayerSchedule(slot.player.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+              return schedule.some((gameDate) => gameDate.toDateString() === date.toDateString());
+            })
+            .map((slot) => ({
+              playerId: slot.player.id,
+              name: slot.player.fullName,
+              headshotUrl: slot.player.providerPlayerId
+                ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${slot.player.providerPlayerId}.png`)
+                : null,
+              positions: slot.player.positions,
+            }))
+        : [];
+
+      // Free agents playing today
+      const freeAgentsPlaying = freeAgents
+        .filter((p) => {
+          const schedule = extractPlayerSchedule(p.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+          return schedule.some((gameDate) => gameDate.toDateString() === date.toDateString());
+        })
+        .map((p) => {
+          const stats = extractNineCatFromPlayerMeta(p.meta as any, league.seasonYear);
+          const schedule = extractPlayerSchedule(p.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+          const gamesThisWeek = schedule.length;
+          
+          return {
+            playerId: p.id,
+            name: p.fullName,
+            headshotUrl: p.providerPlayerId
+              ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${p.providerPlayerId}.png`)
+              : null,
+            positions: p.positions,
+            gamesThisWeek,
+            playsToday: true,
+            perGame: stats.perGame,
+          };
+        })
+        .slice(0, 20); // Limit to top 20 per day
+
+      return {
+        date: date.toISOString().split('T')[0],
+        label: dayOfWeek,
+        myGames: myPlayersPlaying.length,
+        oppGames: oppPlayersPlaying.length,
+        myPlayersPlaying,
+        oppPlayersPlaying,
+        freeAgentsPlaying,
+      };
+    });
+
+    res.setHeader("Cache-Control", "public, max-age=300");
+    return res.json({
+      scoringPeriod: {
+        startDate: scoringPeriodStartDate.toISOString().split('T')[0],
+        endDate: scoringPeriodEndDate.toISOString().split('T')[0],
+      },
+      days,
+      note: null,
+    });
+  } catch (err) {
+    console.error("Error generating streaming schedule:", err);
+    return res.status(500).json({ error: "Failed to generate streaming schedule" });
+  }
+});
+
+// Streaming plan endpoint - day-by-day recommendations
+app.get("/leagues/:leagueId/streaming/plan", async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const teamId = req.query.teamId as string | undefined;
+  const opponentTeamId = req.query.opponentTeamId as string | undefined;
+
+  if (!teamId) {
+    return res.status(400).json({ error: "teamId query parameter required" });
+  }
+
+  try {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, name: true, seasonYear: true, settings: true },
+    });
+    if (!league) return res.status(404).json({ error: "League not found" });
+
+    // Get scoring period info
+    const firstTeam = await prisma.team.findFirst({
+      where: { leagueId },
+      select: { meta: true },
+    });
+    const firstTeamMeta = (firstTeam?.meta as any) || {};
+    const scoringPeriodStartDate = firstTeamMeta.scoringPeriodStartDate 
+      ? new Date(firstTeamMeta.scoringPeriodStartDate)
+      : new Date();
+    const scoringPeriodEndDate = firstTeamMeta.scoringPeriodEndDate
+      ? new Date(firstTeamMeta.scoringPeriodEndDate)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    // Get acquisition limits
+    const acquisitionLimits = await getAcquisitionLimits(leagueId);
+
+    // Get team and opponent data
+    const team = await prisma.team.findFirst({
+      where: { id: teamId, leagueId },
+      select: {
+        id: true,
+        name: true,
+        meta: true,
+        rosterSlots: {
+          where: { endAt: null },
+          select: {
+            meta: true,
+            slotLabel: true,
+            player: { select: { id: true, fullName: true, meta: true, providerPlayerId: true } },
+          },
+        },
+      },
+    });
+    if (!team) return res.status(404).json({ error: "Team not found" });
+
+    let opponent = null;
+    if (opponentTeamId) {
+      opponent = await prisma.team.findFirst({
+        where: { id: opponentTeamId, leagueId },
+        select: {
+          id: true,
+          name: true,
+          rosterSlots: {
+            where: { endAt: null },
+            select: {
+              meta: true,
+              slotLabel: true,
+              player: { select: { id: true, fullName: true, meta: true } },
+            },
+          },
+        },
+      });
+    }
+
+    // Calculate current projections
+    const defaultGamesPerWeek = 4;
+    const { totals: myTotals } = await calculateTeamWeeklyProjection(
+      team.rosterSlots,
+      league.seasonYear,
+      defaultGamesPerWeek,
+      scoringPeriodStartDate.toISOString(),
+      scoringPeriodEndDate.toISOString()
+    );
+
+    let oppTotals: NineCatTotals | null = null;
+    if (opponent) {
+      const oppProjection = await calculateTeamWeeklyProjection(
+        opponent.rosterSlots,
+        league.seasonYear,
+        defaultGamesPerWeek,
+        scoringPeriodStartDate.toISOString(),
+        scoringPeriodEndDate.toISOString()
+      );
+      oppTotals = oppProjection.totals;
+    }
+
+    // Determine most contested categories
+    type ContestedCategory = {
+      key: NineCatKey;
+      label: string;
+      myValue: number;
+      oppValue: number;
+      absDelta: number;
+      normalizedDelta: number;
+    };
+
+    const contestedCategories: ContestedCategory[] = [];
+    const categoryLabels: Record<NineCatKey, string> = {
+      pts: "PTS", reb: "REB", ast: "AST", stl: "STL", blk: "BLK",
+      threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
+    };
+
+    if (oppTotals) {
+      const categoryKeys: NineCatKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
+      
+      // Normalize deltas for fair comparison
+      const maxValues: Record<NineCatKey, number> = {
+        pts: Math.max(myTotals.pts, oppTotals.pts, 100),
+        reb: Math.max(myTotals.reb, oppTotals.reb, 50),
+        ast: Math.max(myTotals.ast, oppTotals.ast, 50),
+        stl: Math.max(myTotals.stl, oppTotals.stl, 10),
+        blk: Math.max(myTotals.blk, oppTotals.blk, 10),
+        threes: Math.max(myTotals.threes, oppTotals.threes, 30),
+        fgPct: 1,
+        ftPct: 1,
+        tov: Math.max(myTotals.tov, oppTotals.tov, 30),
+      };
+
+      for (const key of categoryKeys) {
+        const absDelta = Math.abs(myTotals[key] - oppTotals[key]);
+        const normalizedDelta = absDelta / maxValues[key];
+
+        contestedCategories.push({
+          key,
+          label: categoryLabels[key],
+          myValue: myTotals[key],
+          oppValue: oppTotals[key],
+          absDelta,
+          normalizedDelta,
+        });
+      }
+
+      // Sort by normalized delta (smallest = most contested)
+      contestedCategories.sort((a, b) => a.normalizedDelta - b.normalizedDelta);
+    }
+
+    const topContested = contestedCategories.slice(0, 4);
+
+    // Get all free agents
+    const activeRosterSlots = await prisma.rosterSlot.findMany({
+      where: { leagueId: league.id, endAt: null },
+      select: { playerId: true },
+    });
+    const ownedPlayerIds = new Set(activeRosterSlots.map((slot) => slot.playerId));
+
+    const allPlayers = await prisma.player.findMany({
+      where: {
+        leagues: { some: { id: leagueId } },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        providerPlayerId: true,
+        fullName: true,
+        positions: true,
+        meta: true,
+      },
+    });
+
+    const freeAgents = allPlayers.filter((p) => !ownedPlayerIds.has(p.id));
+
+    // Check if we have schedule data
+    const hasScheduleData = freeAgents.some((p) => {
+      const schedule = extractPlayerSchedule(p.meta as any, scoringPeriodStartDate, scoringPeriodEndDate);
+      return schedule.length > 0;
+    });
+
+    if (!hasScheduleData) {
+      // No schedule data available - return empty plan
+      return res.json({
+        hasScheduleData: false,
+        acquisitionLimits,
+        contestedCategories: topContested.map((c) => ({
+          key: c.key,
+          label: c.label,
+          myValue: Number(c.myValue.toFixed(1)),
+          oppValue: Number(c.oppValue.toFixed(1)),
+          absDelta: Number(c.absDelta.toFixed(1)),
+        })),
+        dailyPlan: [],
+        message: "Schedule data not available. Use manual add/drop preview instead.",
+      });
+    }
+
+    // Build day-by-day plan
+    type DailyRecommendation = {
+      date: string;
+      suggestedAdd: {
+        playerId: string;
+        name: string;
+        headshotUrl: string | null;
+        projectedStats: any;
+      } | null;
+      suggestedDrop: {
+        playerId: string;
+        name: string;
+      } | null;
+      expectedNetDelta: any;
+      expectedCatsChange: number;
+      reason: string;
+    };
+
+    const dailyPlan: DailyRecommendation[] = [];
+    let remainingAdds = acquisitionLimits.remaining ?? 999; // If unknown, allow many
+
+    // Fetch NBA schedules for the scoring period
+    const nbaSchedules = await getCachedNBASchedule(scoringPeriodStartDate, scoringPeriodEndDate);
+    console.log(`[Streaming Plan] Loaded NBA schedules for ${nbaSchedules.size} teams`);
+
+    // Generate dates in scoring period
+    const dates: Date[] = [];
+    for (let d = new Date(scoringPeriodStartDate); d <= scoringPeriodEndDate; d.setDate(d.getDate() + 1)) {
+      dates.push(new Date(d));
+    }
+
+    for (const date of dates) {
+      if (remainingAdds <= 0) break;
+
+      // Find free agents playing on this date
+      const freeAgentsPlayingToday = freeAgents.filter((p) => {
+        const schedule = extractPlayerSchedule(p.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+        return schedule.some((gameDate) => 
+          gameDate.toDateString() === date.toDateString()
+        );
+      });
+
+      if (freeAgentsPlayingToday.length === 0) {
+        dailyPlan.push({
+          date: date.toISOString(),
+          suggestedAdd: null,
+          suggestedDrop: null,
+          expectedNetDelta: null,
+          expectedCatsChange: 0,
+          reason: "No free agents with games today",
+        });
+        continue;
+      }
+
+      // Score each free agent based on contested categories
+      let bestAdd: any = null;
+      let bestScore = -Infinity;
+
+      for (const player of freeAgentsPlayingToday) {
+        const playerStats = extractNineCatFromPlayerMeta(player.meta as any, league.seasonYear);
+        if (!playerStats.hasStats) continue;
+
+        const injuryInfo = extractInjuryInfo(player.meta as any, null);
+        if (injuryInfo.status === "OUT" || injuryInfo.status === "IR") continue;
+
+        // Score based on contested categories (per-game contribution)
+        let score = 0;
+        const boosts: string[] = [];
+
+        for (const cat of topContested) {
+          const perGameContribution = playerStats.perGame[cat.key];
+          if (perGameContribution > 0.1) {
+            score += perGameContribution / (cat.normalizedDelta + 0.01);
+            boosts.push(cat.label);
+          }
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestAdd = {
+            player,
+            playerStats,
+            score,
+            boosts: boosts.slice(0, 2),
+          };
+        }
+      }
+
+      if (!bestAdd) {
+        dailyPlan.push({
+          date: date.toISOString(),
+          suggestedAdd: null,
+          suggestedDrop: null,
+          expectedNetDelta: null,
+          expectedCatsChange: 0,
+          reason: "No suitable free agents for contested categories",
+        });
+        continue;
+      }
+
+      // Find best drop candidate (lowest value player)
+      const myRosterPlayers = team.rosterSlots.map((slot) => ({
+        playerId: slot.player.id,
+        playerName: slot.player.fullName,
+        stats: extractNineCatFromPlayerMeta(slot.player.meta as any, league.seasonYear),
+      }));
+
+      const dropCandidates = myRosterPlayers
+        .filter((p) => p.stats.hasStats)
+        .sort((a, b) => {
+          const scoreA = 
+            a.stats.perGame.pts * 1.0 +
+            a.stats.perGame.reb * 1.2 +
+            a.stats.perGame.ast * 1.5 +
+            a.stats.perGame.stl * 3.0 +
+            a.stats.perGame.blk * 3.0;
+          const scoreB = 
+            b.stats.perGame.pts * 1.0 +
+            b.stats.perGame.reb * 1.2 +
+            b.stats.perGame.ast * 1.5 +
+            b.stats.perGame.stl * 3.0 +
+            b.stats.perGame.blk * 3.0;
+          return scoreA - scoreB;
+        });
+
+      const suggestedDrop = dropCandidates[0] || null;
+
+      const headshotUrl = bestAdd.player.providerPlayerId
+        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${bestAdd.player.providerPlayerId}.png`)
+        : null;
+
+      dailyPlan.push({
+        date: date.toISOString(),
+        suggestedAdd: {
+          playerId: bestAdd.player.id,
+          name: bestAdd.player.fullName,
+          headshotUrl,
+          projectedStats: bestAdd.playerStats.perGame,
+        },
+        suggestedDrop: suggestedDrop ? {
+          playerId: suggestedDrop.playerId,
+          name: suggestedDrop.playerName,
+        } : null,
+        expectedNetDelta: null, // TODO: Calculate net delta
+        expectedCatsChange: 1, // Simplified
+        reason: bestAdd.boosts.length > 0 
+          ? `Targets contested cats: ${bestAdd.boosts.join(", ")}`
+          : "Adds general value",
+      });
+
+      remainingAdds--;
+    }
+
+    res.setHeader("Cache-Control", "public, max-age=300");
+    return res.json({
+      hasScheduleData: true,
+      acquisitionLimits,
+      contestedCategories: topContested.map((c) => ({
+        key: c.key,
+        label: c.label,
+        myValue: Number(c.myValue.toFixed(1)),
+        oppValue: Number(c.oppValue.toFixed(1)),
+        absDelta: Number(c.absDelta.toFixed(1)),
+      })),
+      dailyPlan,
+      scoringPeriod: {
+        startAt: scoringPeriodStartDate.toISOString(),
+        endAt: scoringPeriodEndDate.toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("Error generating streaming plan:", err);
+    return res.status(500).json({ error: "Failed to generate streaming plan" });
+  }
+});
+
+// Streaming impact calculation endpoint
+app.post("/leagues/:leagueId/streaming/impact", express.json(), async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const { teamId, opponentTeamId, addPlayerId, dropPlayerId, scoringPeriodStartDate, scoringPeriodEndDate } = req.body;
+
+  if (!teamId || !addPlayerId || !dropPlayerId) {
+    return res.status(400).json({ error: "teamId, addPlayerId, and dropPlayerId required" });
+  }
+
+  try {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, name: true, seasonYear: true },
+    });
+    if (!league) return res.status(404).json({ error: "League not found" });
+
+    // Get team data
+    const team = await prisma.team.findFirst({
+      where: { id: teamId, leagueId },
+      select: {
+        id: true,
+        name: true,
+        rosterSlots: {
+          where: { endAt: null },
+          select: {
+            meta: true,
+            slotLabel: true,
+            player: { select: { id: true, fullName: true, meta: true, providerPlayerId: true } },
+          },
+        },
+      },
+    });
+    if (!team) return res.status(404).json({ error: "Team not found" });
+
+    // Get opponent data if provided
+    let opponent = null;
+    if (opponentTeamId) {
+      opponent = await prisma.team.findFirst({
+        where: { id: opponentTeamId, leagueId },
+        select: {
+          id: true,
+          name: true,
+          rosterSlots: {
+            where: { endAt: null },
+            select: {
+              meta: true,
+              slotLabel: true,
+              player: { select: { id: true, fullName: true, meta: true } },
+            },
+          },
+        },
+      });
+    }
+
+    // Get add and drop player data
+    const addPlayer = await prisma.player.findUnique({
+      where: { id: addPlayerId },
+      select: { id: true, fullName: true, meta: true, providerPlayerId: true },
+    });
+    const dropPlayer = await prisma.player.findUnique({
+      where: { id: dropPlayerId },
+      select: { id: true, fullName: true, meta: true, providerPlayerId: true },
+    });
+
+    if (!addPlayer) return res.status(404).json({ error: "Add player not found" });
+    if (!dropPlayer) return res.status(404).json({ error: "Drop player not found" });
+
+    const defaultGamesPerWeek = 4;
+
+    // Calculate BEFORE totals (current roster)
+    const { totals: beforeTotals, totalsWithAttempts: beforeTotalsWithAttempts } = await calculateTeamWeeklyProjection(
+      team.rosterSlots,
+      league.seasonYear,
+      defaultGamesPerWeek,
+      scoringPeriodStartDate,
+      scoringPeriodEndDate
+    );
+
+    // Calculate opponent totals
+    let oppTotals: NineCatTotals | null = null;
+    if (opponent) {
+      const oppProjection = await calculateTeamWeeklyProjection(
+        opponent.rosterSlots,
+        league.seasonYear,
+        defaultGamesPerWeek,
+        scoringPeriodStartDate,
+        scoringPeriodEndDate
+      );
+      oppTotals = oppProjection.totals;
+    }
+
+    // Calculate drop player's contribution
+    const dropPlayerStats = extractNineCatFromPlayerMeta(dropPlayer.meta as any, league.seasonYear);
+    const dropInjuryInfo = extractInjuryInfo(dropPlayer.meta as any, null);
+    const dropProjectedGames = calculateProjectedGamesThisWeek(
+      defaultGamesPerWeek,
+      dropInjuryInfo,
+      scoringPeriodStartDate,
+      scoringPeriodEndDate
+    );
+
+    const dropContribution = {
+      pts: dropPlayerStats.perGame.pts * dropProjectedGames,
+      reb: dropPlayerStats.perGame.reb * dropProjectedGames,
+      ast: dropPlayerStats.perGame.ast * dropProjectedGames,
+      stl: dropPlayerStats.perGame.stl * dropProjectedGames,
+      blk: dropPlayerStats.perGame.blk * dropProjectedGames,
+      threes: dropPlayerStats.perGame.threes * dropProjectedGames,
+      tov: dropPlayerStats.perGame.tov * dropProjectedGames,
+    };
+
+    const dropFgaPerGame = dropPlayerStats.totals.fga / Math.max(1, dropPlayerStats.totals.gp);
+    const dropFgmPerGame = dropPlayerStats.totals.fgm / Math.max(1, dropPlayerStats.totals.gp);
+    const dropFtaPerGame = dropPlayerStats.totals.fta / Math.max(1, dropPlayerStats.totals.gp);
+    const dropFtmPerGame = dropPlayerStats.totals.ftm / Math.max(1, dropPlayerStats.totals.gp);
+
+    const dropAttempts = {
+      fga: dropFgaPerGame * dropProjectedGames,
+      fgm: dropFgmPerGame * dropProjectedGames,
+      fta: dropFtaPerGame * dropProjectedGames,
+      ftm: dropFtmPerGame * dropProjectedGames,
+    };
+
+    // Calculate add player's contribution
+    const addPlayerStats = extractNineCatFromPlayerMeta(addPlayer.meta as any, league.seasonYear);
+    const addInjuryInfo = extractInjuryInfo(addPlayer.meta as any, null);
+    const addProjectedGames = calculateProjectedGamesThisWeek(
+      defaultGamesPerWeek,
+      addInjuryInfo,
+      scoringPeriodStartDate,
+      scoringPeriodEndDate
+    );
+
+    const addContribution = {
+      pts: addPlayerStats.perGame.pts * addProjectedGames,
+      reb: addPlayerStats.perGame.reb * addProjectedGames,
+      ast: addPlayerStats.perGame.ast * addProjectedGames,
+      stl: addPlayerStats.perGame.stl * addProjectedGames,
+      blk: addPlayerStats.perGame.blk * addProjectedGames,
+      threes: addPlayerStats.perGame.threes * addProjectedGames,
+      tov: addPlayerStats.perGame.tov * addProjectedGames,
+    };
+
+    const addFgaPerGame = addPlayerStats.totals.fga / Math.max(1, addPlayerStats.totals.gp);
+    const addFgmPerGame = addPlayerStats.totals.fgm / Math.max(1, addPlayerStats.totals.gp);
+    const addFtaPerGame = addPlayerStats.totals.fta / Math.max(1, addPlayerStats.totals.gp);
+    const addFtmPerGame = addPlayerStats.totals.ftm / Math.max(1, addPlayerStats.totals.gp);
+
+    const addAttempts = {
+      fga: addFgaPerGame * addProjectedGames,
+      fgm: addFgmPerGame * addProjectedGames,
+      fta: addFtaPerGame * addProjectedGames,
+      ftm: addFtmPerGame * addProjectedGames,
+    };
+
+    // Calculate AFTER totals (subtract drop, add add)
+    const afterTotalsWithAttempts = {
+      fga: (beforeTotalsWithAttempts.fga || 0) - dropAttempts.fga + addAttempts.fga,
+      fgm: (beforeTotalsWithAttempts.fgm || 0) - dropAttempts.fgm + addAttempts.fgm,
+      fta: (beforeTotalsWithAttempts.fta || 0) - dropAttempts.fta + addAttempts.fta,
+      ftm: (beforeTotalsWithAttempts.ftm || 0) - dropAttempts.ftm + addAttempts.ftm,
+    };
+
+    const afterTotals: NineCatTotals = {
+      pts: beforeTotals.pts - dropContribution.pts + addContribution.pts,
+      reb: beforeTotals.reb - dropContribution.reb + addContribution.reb,
+      ast: beforeTotals.ast - dropContribution.ast + addContribution.ast,
+      stl: beforeTotals.stl - dropContribution.stl + addContribution.stl,
+      blk: beforeTotals.blk - dropContribution.blk + addContribution.blk,
+      threes: beforeTotals.threes - dropContribution.threes + addContribution.threes,
+      tov: beforeTotals.tov - dropContribution.tov + addContribution.tov,
+      fgPct: afterTotalsWithAttempts.fga > 0 ? afterTotalsWithAttempts.fgm / afterTotalsWithAttempts.fga : 0,
+      ftPct: afterTotalsWithAttempts.fta > 0 ? afterTotalsWithAttempts.ftm / afterTotalsWithAttempts.fta : 0,
+    };
+
+    // Calculate matchup results
+    let matchupBefore = null;
+    let matchupAfter = null;
+    let categoryChanges: Array<{ key: NineCatKey; label: string; beforeWin: boolean; afterWin: boolean; flipped: boolean }> = [];
+
+    if (oppTotals) {
+      const categoryKeys: NineCatKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
+      const categoryLabels: Record<NineCatKey, string> = {
+        pts: "PTS", reb: "REB", ast: "AST", stl: "STL", blk: "BLK",
+        threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
+      };
+
+      let beforeWins = 0;
+      let beforeLosses = 0;
+      let afterWins = 0;
+      let afterLosses = 0;
+
+      for (const key of categoryKeys) {
+        const beforeWin = key === "tov" 
+          ? beforeTotals[key] < oppTotals[key]
+          : beforeTotals[key] > oppTotals[key];
+
+        const afterWin = key === "tov"
+          ? afterTotals[key] < oppTotals[key]
+          : afterTotals[key] > oppTotals[key];
+
+        if (beforeWin) beforeWins++;
+        else beforeLosses++;
+
+        if (afterWin) afterWins++;
+        else afterLosses++;
+
+        categoryChanges.push({
+          key,
+          label: categoryLabels[key],
+          beforeWin,
+          afterWin,
+          flipped: beforeWin !== afterWin,
+        });
+      }
+
+      matchupBefore = { wins: beforeWins, losses: beforeLosses };
+      matchupAfter = { wins: afterWins, losses: afterLosses };
+    }
+
+    // Calculate deltas
+    const deltas = {
+      pts: afterTotals.pts - beforeTotals.pts,
+      reb: afterTotals.reb - beforeTotals.reb,
+      ast: afterTotals.ast - beforeTotals.ast,
+      stl: afterTotals.stl - beforeTotals.stl,
+      blk: afterTotals.blk - beforeTotals.blk,
+      threes: afterTotals.threes - beforeTotals.threes,
+      tov: afterTotals.tov - beforeTotals.tov,
+      fgPct: afterTotals.fgPct - beforeTotals.fgPct,
+      ftPct: afterTotals.ftPct - beforeTotals.ftPct,
+    };
+
+    res.setHeader("Cache-Control", "no-cache");
+    return res.json({
+      before: {
+        myTotals: beforeTotals,
+        oppTotals,
+        matchupResult: matchupBefore,
+      },
+      after: {
+        myTotals: afterTotals,
+        oppTotals,
+        matchupResult: matchupAfter,
+      },
+      deltas: {
+        totals: deltas,
+        categoryChanges,
+        netCatsWonDelta: matchupAfter && matchupBefore
+          ? matchupAfter.wins - matchupBefore.wins
+          : 0,
+      },
+      explain: {
+        droppedPlayer: {
+          name: dropPlayer.fullName,
+          projectedGames: dropProjectedGames,
+          contribution: dropContribution,
+        },
+        addedPlayer: {
+          name: addPlayer.fullName,
+          projectedGames: addProjectedGames,
+          contribution: addContribution,
+        },
+      },
+    });
+  } catch (err) {
+    console.error("Error calculating streaming impact:", err);
+    return res.status(500).json({ error: "Failed to calculate streaming impact" });
+  }
+});
+
+// Streaming recommendations endpoint (now uses free agents)
+app.get("/leagues/:leagueId/streaming/recommendations", async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const teamId = req.query.teamId as string | undefined;
+
+  if (!teamId) {
+    return res.status(400).json({ error: "teamId query parameter required" });
+  }
+
+  try {
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { id: true, name: true, seasonYear: true, settings: true },
+    });
+    if (!league) return res.status(404).json({ error: "League not found" });
+
+    // Get all teams
+    const allTeams = await prisma.team.findMany({
+      where: { leagueId },
+      select: {
+        id: true,
+        name: true,
+        meta: true,
+        providerTeamId: true,
+        rosterSlots: {
+          where: { endAt: null },
+          select: {
+            meta: true,
+            slotLabel: true,
+            player: { select: { id: true, fullName: true, meta: true, positions: true } },
+          },
+        },
+      },
+    });
+
+    const selectedTeam = allTeams.find((t) => t.id === teamId);
+    if (!selectedTeam) {
+      return res.status(404).json({ error: "Team not found" });
+    }
+
+    // Get scoring period info
+    const firstTeamMeta = (allTeams[0]?.meta as any) || {};
+    const defaultGamesPerWeek = 4;
+    const scoringPeriodStartDate = firstTeamMeta.scoringPeriodStartDate || null;
+    const scoringPeriodEndDate = firstTeamMeta.scoringPeriodEndDate || null;
+
+    // Calculate my team's projection
+    const { totals: myTotals, totalsWithAttempts: myTotalsWithAttempts } = await calculateTeamWeeklyProjection(
+      selectedTeam.rosterSlots,
+      league.seasonYear,
+      defaultGamesPerWeek,
+      scoringPeriodStartDate || undefined,
+      scoringPeriodEndDate || undefined
+    );
+
+    // Find opponent
+    const teamMeta = (selectedTeam.meta as any) || {};
+    const matchupData = teamMeta.matchup || null;
+    let opponentTotals: NineCatTotals | null = null;
+    let opponentTotalsWithAttempts: any = null;
+
+    if (matchupData && matchupData.opponentTeamId) {
+      const opponentProviderId = String(matchupData.opponentTeamId);
+      const opponent = allTeams.find((t) => t.providerTeamId === opponentProviderId);
+
+      if (opponent) {
+        const oppProjection = await calculateTeamWeeklyProjection(
+          opponent.rosterSlots,
+          league.seasonYear,
+          defaultGamesPerWeek,
+          scoringPeriodStartDate || undefined,
+          scoringPeriodEndDate || undefined
+        );
+        opponentTotals = oppProjection.totals;
+        opponentTotalsWithAttempts = oppProjection.totalsWithAttempts;
+      }
+    }
+
+    // Compute contention (most contested categories)
+    type ContestedCategory = {
+      key: NineCatKey;
+      label: string;
+      myValue: number;
+      oppValue: number;
+      delta: number;
+      absDelta: number;
+      weight: number;
+    };
+
+    const contestedCategories: ContestedCategory[] = [];
+    const categoryLabels: Record<NineCatKey, string> = {
+      pts: "PTS",
+      reb: "REB",
+      ast: "AST",
+      stl: "STL",
+      blk: "BLK",
+      threes: "3PM",
+      fgPct: "FG%",
+      ftPct: "FT%",
+      tov: "TO",
+    };
+
+    if (opponentTotals) {
+      const categoryKeys: NineCatKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
+      
+      for (const key of categoryKeys) {
+        const myValue = myTotals[key];
+        const oppValue = opponentTotals[key];
+        const delta = myValue - oppValue;
+        const absDelta = Math.abs(delta);
+        const epsilon = 0.01;
+        const weight = 1 / (absDelta + epsilon);
+
+        contestedCategories.push({
+          key,
+          label: categoryLabels[key],
+          myValue,
+          oppValue,
+          delta,
+          absDelta,
+          weight,
+        });
+      }
+
+      // Sort by smallest difference (most contested)
+      contestedCategories.sort((a, b) => a.absDelta - b.absDelta);
+    }
+
+    // Get all active roster slots to determine owned players
+    const activeRosterSlots = await prisma.rosterSlot.findMany({
+      where: {
+        leagueId: league.id,
+        endAt: null,
+      },
+      select: {
+        playerId: true,
+      },
+    });
+
+    const ownedPlayerIds = new Set(activeRosterSlots.map((slot) => slot.playerId));
+
+    // Get all players in the league
+    const allPlayers = await prisma.player.findMany({
+      where: {
+        leagues: {
+          some: { id: leagueId },
+        },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        providerPlayerId: true,
+        fullName: true,
+        positions: true,
+        meta: true,
+      },
+    });
+
+    // Filter to TRUE free agents (not owned by ANY team in the league)
+    const freeAgents = allPlayers.filter((p) => !ownedPlayerIds.has(p.id));
+
+    // Score each free agent
+    type ScoredPlayer = {
+      playerId: string;
+      providerPlayerId: string;
+      fullName: string;
+      positions: string[];
+      headshotUrl: string | null;
+      projectedGamesRemainingThisWeek: number;
+      projectedTotalsAdd: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        tov: number;
+        fgPct: number;
+        ftPct: number;
+      };
+      addedAttempts: {
+        fga: number;
+        fgm: number;
+        fta: number;
+        ftm: number;
+      };
+      keyCatsBoosted: string[];
+      score: number;
+    };
+
+    const scoredPlayers: ScoredPlayer[] = [];
+
+    for (const player of freeAgents) {
+      const meta = (player.meta as any) || {};
+      const playerStats = extractNineCatFromPlayerMeta(meta, league.seasonYear);
+      
+      if (!playerStats.hasStats) continue;
+
+      // Calculate injury info
+      const injuryInfo = extractInjuryInfo(meta, null);
+      
+      // Skip OUT/IR players
+      if (injuryInfo.status === "OUT" || injuryInfo.status === "IR") {
+        continue;
+      }
+
+      // Calculate projected games
+      const projectedGames = calculateProjectedGamesThisWeek(
+        defaultGamesPerWeek,
+        injuryInfo,
+        scoringPeriodStartDate || undefined,
+        scoringPeriodEndDate || undefined
+      );
+
+      if (projectedGames === 0) continue;
+
+      // Calculate projected totals
+      const perGame = playerStats.perGame;
+      const projectedTotalsAdd = {
+        pts: perGame.pts * projectedGames,
+        reb: perGame.reb * projectedGames,
+        ast: perGame.ast * projectedGames,
+        stl: perGame.stl * projectedGames,
+        blk: perGame.blk * projectedGames,
+        threes: perGame.threes * projectedGames,
+        tov: perGame.tov * projectedGames,
+        fgPct: perGame.fgPct,
+        ftPct: perGame.ftPct,
+      };
+
+      // Calculate attempts
+      const fgaPerGame = playerStats.totals.fga / Math.max(1, playerStats.totals.gp);
+      const fgmPerGame = playerStats.totals.fgm / Math.max(1, playerStats.totals.gp);
+      const ftaPerGame = playerStats.totals.fta / Math.max(1, playerStats.totals.gp);
+      const ftmPerGame = playerStats.totals.ftm / Math.max(1, playerStats.totals.gp);
+
+      const addedAttempts = {
+        fga: fgaPerGame * projectedGames,
+        fgm: fgmPerGame * projectedGames,
+        fta: ftaPerGame * projectedGames,
+        ftm: ftmPerGame * projectedGames,
+      };
+
+      // Score based on contested categories
+      let score = 0;
+      const keyCatsBoosted: string[] = [];
+
+      if (contestedCategories.length > 0) {
+        // Focus on top 4 most contested
+        const topContested = contestedCategories.slice(0, 4);
+
+        for (const cat of topContested) {
+          const contribution = projectedTotalsAdd[cat.key];
+          
+          // For TO, lower is better, so penalize if adding TO when behind
+          if (cat.key === "tov") {
+            // If I'm losing TO (myValue > oppValue), penalize adding TO
+            if (cat.delta > 0) {
+              score -= contribution * cat.weight * 0.5;
+            }
+          } else {
+            // For other cats, reward contribution
+            score += contribution * cat.weight;
+            
+            // Mark as key cat if significant contribution
+            if (contribution > 0.1) {
+              keyCatsBoosted.push(cat.label);
+            }
+          }
+        }
+      }
+
+      // Fallback: if no contested cats, use general value
+      if (score === 0) {
+        score = projectedTotalsAdd.pts * 0.5 + 
+                projectedTotalsAdd.reb * 0.3 + 
+                projectedTotalsAdd.ast * 0.3 + 
+                projectedTotalsAdd.stl * 2 + 
+                projectedTotalsAdd.blk * 2 + 
+                projectedTotalsAdd.threes * 1;
+      }
+
+      // Generate headshot URL using ESPN CDN
+      const headshotUrl = player.providerPlayerId
+        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${player.providerPlayerId}.png`)
+        : null;
+
+      scoredPlayers.push({
+        playerId: player.id,
+        providerPlayerId: player.providerPlayerId,
+        fullName: player.fullName,
+        positions: Array.isArray(player.positions) ? player.positions : [],
+        headshotUrl,
+        projectedGamesRemainingThisWeek: projectedGames,
+        projectedTotalsAdd,
+        addedAttempts,
+        keyCatsBoosted: keyCatsBoosted.slice(0, 3), // Top 3 cats
+        score,
+      });
+    }
+
+    // Sort by score descending
+    scoredPlayers.sort((a, b) => b.score - a.score);
+
+    // Top streamers today (top 8)
+    const topStreamersToday = scoredPlayers.slice(0, 8);
+
+    // Suggested adds (same as top streamers for now, could be different logic)
+    const suggestedAdds = scoredPlayers.slice(0, 12);
+
+    // Schedule advantage
+    // Calculate remaining games for my team and opponent
+    let myRemainingGames = 0;
+    let opponentRemainingGames = 0;
+
+    for (const slot of selectedTeam.rosterSlots) {
+      const meta = (slot.player.meta as any) || {};
+      const injuryInfo = extractInjuryInfo(meta, null);
+      const projectedGames = calculateProjectedGamesThisWeek(
+        defaultGamesPerWeek,
+        injuryInfo,
+        scoringPeriodStartDate || undefined,
+        scoringPeriodEndDate || undefined
+      );
+      myRemainingGames += projectedGames;
+    }
+
+    if (matchupData && matchupData.opponentTeamId) {
+      const opponentProviderId = String(matchupData.opponentTeamId);
+      const opponent = allTeams.find((t) => t.providerTeamId === opponentProviderId);
+
+      if (opponent) {
+        for (const slot of opponent.rosterSlots) {
+          const meta = (slot.player.meta as any) || {};
+          const injuryInfo = extractInjuryInfo(meta, null);
+          const projectedGames = calculateProjectedGamesThisWeek(
+            defaultGamesPerWeek,
+            injuryInfo,
+            scoringPeriodStartDate || undefined,
+            scoringPeriodEndDate || undefined
+          );
+          opponentRemainingGames += projectedGames;
+        }
+      }
+    }
+
+    // Trade acquisition limit (from league settings if available)
+    const leagueSettings = (league.settings as any) || {};
+    const acquisitionLimit = typeof leagueSettings.acquisitionLimit === "number" ? leagueSettings.acquisitionLimit : null;
+    const acquisitionsUsed = typeof teamMeta.acquisitionsUsed === "number" ? teamMeta.acquisitionsUsed : null;
+    const acquisitionsRemaining = acquisitionLimit !== null && acquisitionsUsed !== null 
+      ? Math.max(0, acquisitionLimit - acquisitionsUsed) 
+      : null;
+
+    res.setHeader("Cache-Control", "public, max-age=60");
+    return res.json({
+      contention: contestedCategories.slice(0, 4).map((c) => ({
+        key: c.key,
+        label: c.label,
+        myValue: Number(c.myValue.toFixed(1)),
+        oppValue: Number(c.oppValue.toFixed(1)),
+        delta: Number(c.delta.toFixed(1)),
+      })),
+      topStreamersToday: topStreamersToday.map((p) => ({
+        playerId: p.playerId,
+        providerPlayerId: p.providerPlayerId,
+        fullName: p.fullName,
+        positions: p.positions,
+        headshotUrl: p.headshotUrl,
+        projectedGamesRemainingThisWeek: p.projectedGamesRemainingThisWeek,
+        projectedTotalsAdd: {
+          pts: Number(p.projectedTotalsAdd.pts.toFixed(1)),
+          reb: Number(p.projectedTotalsAdd.reb.toFixed(1)),
+          ast: Number(p.projectedTotalsAdd.ast.toFixed(1)),
+          stl: Number(p.projectedTotalsAdd.stl.toFixed(1)),
+          blk: Number(p.projectedTotalsAdd.blk.toFixed(1)),
+          threes: Number(p.projectedTotalsAdd.threes.toFixed(1)),
+          tov: Number(p.projectedTotalsAdd.tov.toFixed(1)),
+          fgPct: Number((p.projectedTotalsAdd.fgPct * 100).toFixed(1)),
+          ftPct: Number((p.projectedTotalsAdd.ftPct * 100).toFixed(1)),
+        },
+        addedAttempts: {
+          fga: Number(p.addedAttempts.fga.toFixed(1)),
+          fgm: Number(p.addedAttempts.fgm.toFixed(1)),
+          fta: Number(p.addedAttempts.fta.toFixed(1)),
+          ftm: Number(p.addedAttempts.ftm.toFixed(1)),
+        },
+        keyCatsBoosted: p.keyCatsBoosted,
+        score: Number(p.score.toFixed(2)),
+      })),
+      suggestedAdds: suggestedAdds.map((p) => ({
+        playerId: p.playerId,
+        providerPlayerId: p.providerPlayerId,
+        fullName: p.fullName,
+        positions: p.positions,
+        headshotUrl: p.headshotUrl,
+        projectedGamesRemainingThisWeek: p.projectedGamesRemainingThisWeek,
+        projectedTotalsAdd: {
+          pts: Number(p.projectedTotalsAdd.pts.toFixed(1)),
+          reb: Number(p.projectedTotalsAdd.reb.toFixed(1)),
+          ast: Number(p.projectedTotalsAdd.ast.toFixed(1)),
+          stl: Number(p.projectedTotalsAdd.stl.toFixed(1)),
+          blk: Number(p.projectedTotalsAdd.blk.toFixed(1)),
+          threes: Number(p.projectedTotalsAdd.threes.toFixed(1)),
+          tov: Number(p.projectedTotalsAdd.tov.toFixed(1)),
+          fgPct: Number((p.projectedTotalsAdd.fgPct * 100).toFixed(1)),
+          ftPct: Number((p.projectedTotalsAdd.ftPct * 100).toFixed(1)),
+        },
+        addedAttempts: {
+          fga: Number(p.addedAttempts.fga.toFixed(1)),
+          fgm: Number(p.addedAttempts.fgm.toFixed(1)),
+          fta: Number(p.addedAttempts.fta.toFixed(1)),
+          ftm: Number(p.addedAttempts.ftm.toFixed(1)),
+        },
+        keyCatsBoosted: p.keyCatsBoosted,
+        score: Number(p.score.toFixed(2)),
+      })),
+      scheduleAdvantage: {
+        myRemainingGames: Math.round(myRemainingGames),
+        opponentRemainingGames: Math.round(opponentRemainingGames),
+        advantage: Math.round(myRemainingGames - opponentRemainingGames),
+      },
+      tradeAcquisitionLimit: {
+        limit: acquisitionLimit,
+        used: acquisitionsUsed,
+        remaining: acquisitionsRemaining,
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching streaming recommendations:", err);
+    return res.status(500).json({ error: "Failed to fetch streaming recommendations" });
+  }
+});
+
 // Get weekly projection for team (legacy endpoint - keep for backward compatibility)
 app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) => {
   const leagueId = req.params.leagueId;
@@ -1264,6 +3875,7 @@ app.post("/ingest/espn", async (_req, res) => {
   url.searchParams.append("view", "mSettings");
   url.searchParams.append("view", "mTeam");
   url.searchParams.append("view", "mRoster");
+  url.searchParams.append("view", "mSchedule");
   url.searchParams.append("view", "mStandings");
   url.searchParams.append("view", "mMatchupScore");
   url.searchParams.append("view", "mLiveScoring");
@@ -1667,6 +4279,7 @@ app.get("/debug/team/:leagueId/:teamId/roster-diff", async (req, res) => {
           `${baseUrl}/apis/v3/games/fba/seasons/${seasonId}/segments/0/leagues/${providerLeagueId}`
         );
         url.searchParams.append("view", "mRoster");
+        url.searchParams.append("view", "mSchedule");
         url.searchParams.set("platformVersion", platformVersion);
 
         const r = await fetch(url.toString(), {
