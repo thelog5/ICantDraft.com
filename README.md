@@ -165,32 +165,40 @@ ESPN_SWID="{YOUR_SWID_COOKIE}"
 
 ESPN_PLATFORM_VERSION="ec4491ff98dc3a672229031f460410e0746d6ecc"
 ESPN_BASE_URL="https://lm-api-reads.fantasy.espn.com"
+```
 ### Install Dependencies
 
+```
 pnpm install
+```
 
 ---
 
 ### Database Setup
 
+```
 pnpm prisma:generate
 pnpm prisma:migrate
+```
 
 ---
 
 ### Run Backend API
 
+```
 pnpm -C apps/api dev
-
+```
 API runs on:
 http://localhost:3000
+
 
 ---
 
 ### Run Frontend
 
+```
 pnpm -C apps/web dev
-
+```
 Web runs on:
 http://localhost:5173
 
