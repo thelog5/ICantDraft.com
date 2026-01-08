@@ -1196,12 +1196,12 @@ function extractPlayerSchedule(
   
   // Filter to scoring period
   for (const gameDate of teamGames) {
-    const gameDateUTC = new Date(Date.UTC(gameDate.getFullYear(), gameDate.getMonth(), gameDate.getDate()));
-    
-    if (gameDateUTC >= periodStartUTC && gameDateUTC <= periodEndUTC) {
-      gameDates.push(gameDateUTC);
-    }
-  }
+        const gameDateUTC = new Date(Date.UTC(gameDate.getFullYear(), gameDate.getMonth(), gameDate.getDate()));
+        
+        if (gameDateUTC >= periodStartUTC && gameDateUTC <= periodEndUTC) {
+          gameDates.push(gameDateUTC);
+        }
+      }
   
   return gameDates;
 }
@@ -5525,14 +5525,6 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
       reason = "All candidates failed quality filters.";
     } else {
       reason = "No trades passed all filters.";
-    }
-  } else {
-    // Check if we should show low confidence warning
-    const avgProbability = allSuggestions.reduce((sum, s) => sum + s.impact.my.probability, 0) / allSuggestions.length;
-    const avgConfidence = allSuggestions.reduce((sum, s) => sum + s.impact.my.confidence, 0) / allSuggestions.length;
-    
-    if (avgProbability < 35 || avgConfidence < 35) {
-      warning = "Trades found, but confidence is low (injuries / volatility). Showing best options anyway.";
     }
   }
 

@@ -159,6 +159,7 @@ export default function TradeSuggestions() {
   const [warning, setWarning] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>("myTeamScoreDeltaDesc");
   const [, setLeagueTeamsCount] = useState<number>(12);
+  const [displayCount, setDisplayCount] = useState(10);
 
   useEffect(() => {
     if (contextLoading || !ctx) return;
@@ -185,6 +186,9 @@ export default function TradeSuggestions() {
         setMyTeam(data.myTeam);
         // Always set suggestions - don't filter in UI (server already filtered)
         setSuggestions(data.suggestions || []);
+        
+        // Reset display count when filters change
+        setDisplayCount(10);
         
         // Store league teams count
         if (data.leagueTeamsCount) {
@@ -294,6 +298,22 @@ export default function TradeSuggestions() {
     
     return sorted;
   }, [suggestions, sortBy]);
+
+  // Reset display count when sort changes
+  useEffect(() => {
+    setDisplayCount(10);
+  }, [sortBy]);
+
+  // Get paginated suggestions
+  const displayedSuggestions = useMemo(() => {
+    return sortedSuggestions.slice(0, displayCount);
+  }, [sortedSuggestions, displayCount]);
+
+  const hasMoreTrades = displayCount < sortedSuggestions.length;
+
+  const handleLoadMore = () => {
+    setDisplayCount(prev => Math.min(prev + 10, sortedSuggestions.length));
+  };
 
   if (contextLoading || loading) {
     return (
@@ -470,7 +490,7 @@ export default function TradeSuggestions() {
               </div>
             )}
             <div className="trade-suggestions-list">
-              {sortedSuggestions.map((suggestion) => (
+              {displayedSuggestions.map((suggestion) => (
                 <TradeCard
                   key={suggestion.id}
                   suggestion={suggestion}
@@ -479,6 +499,23 @@ export default function TradeSuggestions() {
                 />
               ))}
             </div>
+            
+            {sortedSuggestions.length > 0 && (
+              <div className="trade-pagination-container">
+                {hasMoreTrades ? (
+                  <button
+                    onClick={handleLoadMore}
+                    className="load-more-button"
+                  >
+                    Load More ({sortedSuggestions.length - displayCount} remaining)
+                  </button>
+                ) : displayedSuggestions.length >= 10 ? (
+                  <p className="no-more-trades">
+                    No more trades — showing all {sortedSuggestions.length} suggestions
+                  </p>
+                ) : null}
+              </div>
+            )}
           </>
         )}
       </div>

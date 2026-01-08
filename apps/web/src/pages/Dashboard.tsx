@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import TopNav from "../components/TopNav";
 import HomeHeader from "../components/HomeHeader";
 import { useActiveContext } from "../hooks/useActiveContext";
@@ -38,6 +39,10 @@ export default function Dashboard() {
   const [selectedTeamIndex, setSelectedTeamIndex] = useState(0);
   const [selectedTeamProfile, setSelectedTeamProfile] = useState<TeamProfileResponse | null>(null);
   const [weeklyProjections, setWeeklyProjections] = useState<Awaited<ReturnType<typeof api.getWeeklyProjections>> | null>(null);
+  const [tradeSuggestions, setTradeSuggestions] = useState<any[]>([]);
+  const [loadingTrades, setLoadingTrades] = useState(false);
+  const [streamingSuggestions, setStreamingSuggestions] = useState<any[]>([]);
+  const [loadingStreaming, setLoadingStreaming] = useState(false);
 
   // ALL HOOKS MUST BE CALLED UNCONDITIONALLY AT THE TOP
   // Calculate roster with roles - must be called before any returns
@@ -315,6 +320,53 @@ export default function Dashboard() {
     });
 
     loadData();
+  }, [ctx, contextLoading]);
+
+  // Fetch trade suggestions and streaming suggestions
+  useEffect(() => {
+    if (contextLoading || !ctx) return;
+
+    // Fetch trade suggestions - get top 2 for dashboard
+    setLoadingTrades(true);
+    api.getTradeSuggestions(ctx.leagueId, ctx.teamId, {})
+      .then(data => {
+        if (data && data.suggestions && Array.isArray(data.suggestions)) {
+          setTradeSuggestions(data.suggestions.slice(0, 2));
+        } else {
+          setTradeSuggestions([]);
+        }
+      })
+      .catch(err => {
+        console.error("Error fetching trade suggestions:", err);
+        setTradeSuggestions([]);
+      })
+      .finally(() => {
+        setLoadingTrades(false);
+      });
+
+    // Fetch streaming suggestions - get next 3 days for dashboard
+    setLoadingStreaming(true);
+    api.getStreamingOverview(ctx.leagueId, ctx.teamId)
+      .then(data => {
+        if (data && data.status === "ok" && data.dailyRecommendations) {
+          // Store as an array: each day with its recommendations and free agents for headshots
+          const next3Days = data.dailyRecommendations.slice(0, 3);
+          const streamingData = next3Days.map(day => ({
+            ...day,
+            freeAgents: data.freeAgents // Include free agents for headshot lookup
+          }));
+          setStreamingSuggestions(streamingData as any);
+        } else {
+          setStreamingSuggestions([]);
+        }
+      })
+      .catch(err => {
+        console.error("Error fetching streaming suggestions:", err);
+        setStreamingSuggestions([]);
+      })
+      .finally(() => {
+        setLoadingStreaming(false);
+      });
   }, [ctx, contextLoading]);
 
   const loadData = async () => {
@@ -637,17 +689,95 @@ export default function Dashboard() {
           <Card className="dashboard-card trade-suggestions-card">
             <div className="trade-suggestions-header">
               <h2 className="card-title">Trade Suggestions</h2>
-              <button className="view-all-button" disabled>View All Proposals →</button>
+              <Link to="/trade-suggestions" className="view-all-button">
+                View All Proposals →
+              </Link>
             </div>
-            <div className="trade-suggestions-grid">
-              <div className="trade-suggestion-placeholder">
-                <div className="trade-placeholder-icon">📊</div>
-                <p className="trade-placeholder-text">
-                  Trade analysis engine requires player-level valuation data
-                </p>
-                <p className="trade-placeholder-subtext">Coming soon</p>
+            {loadingTrades ? (
+              <div className="trade-suggestions-loading">Loading...</div>
+            ) : tradeSuggestions.length > 0 ? (
+              <div className="dashboard-trades-list">
+                {tradeSuggestions.map((suggestion) => {
+                  const myImpact = suggestion.impact.my;
+                  const oppImpact = suggestion.impact.opp;
+                  return (
+                    <div key={suggestion.id} className="dashboard-trade-item">
+                      <div className="dashboard-trade-header">
+                        <div className="partner-team">
+                          {suggestion.partnerTeam.avatarUrl ? (
+                            <img 
+                              src={suggestion.partnerTeam.avatarUrl} 
+                              alt={suggestion.partnerTeam.name}
+                              className="partner-avatar"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                          ) : null}
+                          <div className="partner-name">{suggestion.partnerTeam.name}</div>
+                        </div>
+                        <div className="trade-metrics-compact">
+                          <div className="metric-pill-small">
+                            <span className="metric-label-small">Your Grade</span>
+                            <span className={`grade-badge-small grade-${myImpact.grade.replace(/[+-]/g, "")}`}>
+                              {myImpact.grade}
+                            </span>
+                          </div>
+                          <div className="metric-pill-small">
+                            <span className="metric-label-small">Their Grade</span>
+                            <span className={`grade-badge-small grade-${oppImpact.grade.replace(/[+-]/g, "")}`}>
+                              {oppImpact.grade}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="trade-players-row">
+                        <div className="trade-side-compact">
+                          <div className="trade-side-label-small">Send</div>
+                          {suggestion.trade.send.map((p: any) => (
+                            <div key={p.playerId} className="player-compact">
+                              {p.headshotUrl ? (
+                                <img src={p.headshotUrl} alt={p.name} className="player-headshot-small" />
+                              ) : (
+                                <div className="player-headshot-placeholder-small">
+                                  {p.name.substring(0, 2)}
+                                </div>
+                              )}
+                              <span className="player-name-small">{p.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="trade-arrow-small">→</div>
+                        <div className="trade-side-compact">
+                          <div className="trade-side-label-small">Receive</div>
+                          {suggestion.trade.receive.map((p: any) => (
+                            <div key={p.playerId} className="player-compact">
+                              {p.headshotUrl ? (
+                                <img src={p.headshotUrl} alt={p.name} className="player-headshot-small" />
+                              ) : (
+                                <div className="player-headshot-placeholder-small">
+                                  {p.name.substring(0, 2)}
+                                </div>
+                              )}
+                              <span className="player-name-small">{p.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            ) : (
+              <div className="trade-suggestions-grid">
+                <div className="trade-suggestion-placeholder">
+                  <div className="trade-placeholder-icon">📊</div>
+                  <p className="trade-placeholder-text">
+                    No trade suggestions available
+                  </p>
+                </div>
+              </div>
+            )}
           </Card>
 
           {/* My Team Analysis */}
@@ -745,8 +875,15 @@ export default function Dashboard() {
                           )}
                           <div className="player-details">
                             <div className="player-name">{player.fullName}</div>
-                            <div className={`player-role ${roleClass}`}>
-                              {player.role?.label || "Roster Player"}
+                            <div className="player-meta-row">
+                              <div className={`player-role ${roleClass}`}>
+                                {player.role?.label || "Roster Player"}
+                              </div>
+                              {player.positions && player.positions.length > 0 && (
+                                <div className="player-positions">
+                                  {player.positions.join(", ")}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -766,12 +903,66 @@ export default function Dashboard() {
 
           {/* Streaming Suggestions */}
           <Card className="dashboard-card streaming-pickups-card">
-            <h2 className="card-title">Streaming Suggestions</h2>
-            <div className="streaming-pickups-content">
-              <p className="streaming-pickups-placeholder">
-                Player recommendations and streaming suggestions will be available here soon.
-              </p>
+            <div className="streaming-suggestions-header">
+              <h2 className="card-title">Streaming Suggestions</h2>
+              <Link to="/streaming" className="view-all-button">
+                View All →
+              </Link>
             </div>
+            {loadingStreaming ? (
+              <div className="streaming-suggestions-loading">Loading...</div>
+            ) : streamingSuggestions.length > 0 ? (
+              <div className="dashboard-streaming-days">
+                {streamingSuggestions.map((day: any) => {
+                  const dayRecs = day.recommendations || [];
+                  if (dayRecs.length === 0) return null;
+                  
+                  return (
+                    <div key={day.dateISO} className="dashboard-day-card">
+                      <div className="dashboard-day-header">
+                        <span className="dashboard-day-label">{day.label.split(',')[0]}</span>
+                        <span className="dashboard-day-date">{day.label.split(', ')[1]}</span>
+                      </div>
+                      <div className="dashboard-day-recs">
+                        {dayRecs.slice(0, 2).map((rec: any, idx: number) => {
+                          const player = day.freeAgents?.find((fa: any) => fa.playerId === rec.addPlayerId);
+                          return (
+                            <div key={idx} className="dashboard-rec-item">
+                              {player?.headshotUrl ? (
+                                <img 
+                                  src={player.headshotUrl} 
+                                  alt={rec.addPlayerName}
+                                  className="dashboard-rec-headshot"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = "none";
+                                  }}
+                                />
+                              ) : (
+                                <div className="dashboard-rec-headshot-placeholder">
+                                  {rec.addPlayerName.substring(0, 2)}
+                                </div>
+                              )}
+                              <div className="dashboard-rec-info">
+                                <span className="dashboard-rec-name">{rec.addPlayerName}</span>
+                                {rec.addBoosts && rec.addBoosts.length > 0 && (
+                                  <span className="dashboard-rec-boost">{rec.addBoosts[0]}</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="streaming-pickups-content">
+                <p className="streaming-pickups-placeholder">
+                  No streaming suggestions available
+                </p>
+              </div>
+            )}
           </Card>
         </div>
       </div>
