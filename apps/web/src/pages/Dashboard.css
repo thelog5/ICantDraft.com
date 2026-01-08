@@ -264,7 +264,7 @@
   gap: 1rem;
   padding: 0.75rem 1rem;
   background-color: #ffffff;
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .matchup-score {
@@ -607,6 +607,13 @@
   font-size: 1rem;
 }
 
+.player-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .player-role {
   font-size: 0.8125rem;
   padding: 0.25rem 0.625rem;
@@ -614,6 +621,15 @@
   display: inline-block;
   width: fit-content;
   font-weight: 600;
+}
+
+.player-positions {
+  font-size: 0.75rem;
+  color: #666;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  background-color: #f3f3f3;
+  border-radius: 3px;
 }
 
 .player-role.core {

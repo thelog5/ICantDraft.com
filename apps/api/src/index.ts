@@ -5526,14 +5526,6 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
     } else {
       reason = "No trades passed all filters.";
     }
-  } else {
-    // Check if we should show low confidence warning
-    const avgProbability = allSuggestions.reduce((sum, s) => sum + s.impact.my.probability, 0) / allSuggestions.length;
-    const avgConfidence = allSuggestions.reduce((sum, s) => sum + s.impact.my.confidence, 0) / allSuggestions.length;
-    
-    if (avgProbability < 35 || avgConfidence < 35) {
-      warning = "Trades found, but confidence is low (injuries / volatility). Showing best options anyway.";
-    }
   }
 
   const myTeamAvatarUrl = await getTeamAvatarUrl(req, myTeam.id);

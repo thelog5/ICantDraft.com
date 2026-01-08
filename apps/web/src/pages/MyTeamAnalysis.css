@@ -264,47 +264,65 @@
 
 .category-badges {
   display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .category-badge {
-  padding: 1rem 1.25rem;
-  border-radius: 6px;
+  flex: 1;
+  min-width: 140px;
+  padding: 1.5rem 1.25rem;
+  border-radius: 8px;
+  text-align: center;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
+  transition: all 0.2s;
 }
 
 .category-badge.strength {
-  background: linear-gradient(135deg, #e8f5ed 0%, #f0f9f4 100%);
-  border: 1px solid #b8e6c9;
+  background-color: #e8f5ed;
+  border: 2px solid #00a651;
+}
+
+.category-badge.strength:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 166, 81, 0.15);
 }
 
 .category-badge.weakness {
-  background: linear-gradient(135deg, #fee 0%, #fff5f5 100%);
-  border: 1px solid #fcc;
+  background-color: #ffe5e5;
+  border: 2px solid #e31837;
+}
+
+.category-badge.weakness:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(227, 24, 55, 0.15);
 }
 
 .badge-category {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #222;
-  min-width: 60px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .badge-detail {
-  font-size: 0.875rem;
-  color: #666;
-  font-weight: 500;
+  font-size: 1.75rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -1px;
+  color: #222;
 }
 
-.badge-z {
-  font-size: 0.8125rem;
-  color: #999;
-  font-weight: 600;
-  font-family: monospace;
+.category-badge.strength .badge-detail {
+  color: #222;
+}
+
+.category-badge.weakness .badge-detail {
+  color: #222;
 }
 
 /* Punt Strategy */
@@ -313,6 +331,132 @@
   color: #666;
   line-height: 1.6;
   font-size: 0.9375rem;
+}
+
+/* Modern Punt Explanation Box */
+.punt-explanation-box {
+  display: flex;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #bae6fd;
+  border-radius: 8px;
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.punt-explanation-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.punt-explanation-content {
+  flex: 1;
+}
+
+.punt-explanation-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0c4a6e;
+  margin: 0 0 0.75rem 0;
+}
+
+.punt-explanation-text {
+  font-size: 0.9375rem;
+  color: #1e293b;
+  line-height: 1.6;
+  margin: 0 0 0.75rem 0;
+}
+
+.punt-explanation-warning {
+  font-size: 0.875rem;
+  color: #78350f;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0.75rem;
+  background-color: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  border-radius: 4px;
+}
+
+/* Section Subtitles */
+.punt-section-subtitle,
+.focus-section-subtitle {
+  font-size: 0.875rem;
+  color: #666;
+  margin-bottom: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Modern Punt/Focus Badges */
+.punt-badges-modern,
+.focus-badges-modern {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.punt-badge-modern,
+.focus-badge-modern {
+  flex: 1;
+  min-width: 140px;
+  padding: 1.5rem 1.25rem;
+  border-radius: 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+}
+
+.punt-badge-modern {
+  background-color: #ffe5e5;
+  border: 2px solid #e31837;
+}
+
+.punt-badge-modern:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(227, 24, 55, 0.15);
+}
+
+.focus-badge-modern {
+  background-color: #e8f5ed;
+  border: 2px solid #00a651;
+}
+
+.focus-badge-modern:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 166, 81, 0.15);
+}
+
+.badge-rank-large {
+  font-size: 2.5rem;
+  font-weight: 900;
+  color: #222;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.badge-rank-large.strength {
+  color: #222;
+}
+
+.badge-category-large {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #222;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-total-teams {
+  font-size: 0.8125rem;
+  color: #666;
+  font-weight: 500;
 }
 
 .punt-strategy-grid {

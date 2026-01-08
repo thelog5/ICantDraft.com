@@ -459,11 +459,9 @@ export default function MyTeamAnalysis() {
               <div className="category-badges">
                 {strengths.map((cat) => (
                   <div key={cat.key} className="category-badge strength">
+                    <div className="badge-detail">#{cat.rank}</div>
                     <div className="badge-category">{categoryLabels[cat.key]}</div>
-                    <div className="badge-detail">
-                      Rank #{cat.rank} / {totalTeams}
-                    </div>
-                    <div className="badge-z">z: {cat.zScore.toFixed(2)}</div>
+                    <div className="badge-total-teams">out of {totalTeams} teams</div>
                   </div>
                 ))}
               </div>
@@ -473,11 +471,9 @@ export default function MyTeamAnalysis() {
               <div className="category-badges">
                 {weaknesses.map((cat) => (
                   <div key={cat.key} className="category-badge weakness">
+                    <div className="badge-detail">#{cat.rank}</div>
                     <div className="badge-category">{categoryLabels[cat.key]}</div>
-                    <div className="badge-detail">
-                      Rank #{cat.rank} / {totalTeams}
-                    </div>
-                    <div className="badge-z">z: {cat.zScore.toFixed(2)}</div>
+                    <div className="badge-total-teams">out of {totalTeams} teams</div>
                   </div>
                 ))}
               </div>
@@ -488,43 +484,49 @@ export default function MyTeamAnalysis() {
         {/* C) Punt Strategy */}
         <Card>
           <h2 className="card-title">Punt Strategy Recommendation</h2>
-          <p className="punt-explanation">
-            Based on your team's z-scores and category rankings, here's a deterministic
-            punt strategy to maximize your competitive advantage.
-          </p>
-          <div className="punt-strategy-grid">
-            <div className="punt-section">
-              <h3 className="punt-section-title">Recommended Punt (1-2 categories)</h3>
-              <div className="punt-badges">
-                {puntCandidates.map((cat) => (
-                  <div key={cat.key} className="punt-badge">
-                    <div className="punt-badge-category">{categoryLabels[cat.key]}</div>
-                    <div className="punt-badge-reason">
-                      Rank #{cat.rank} / {totalTeams} • z: {cat.zScore.toFixed(2)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="punt-note">
-                These categories have your lowest z-scores. Punting them (intentionally
-                ignoring) lets you dominate other categories.
+          <div className="punt-explanation-box">
+            <div className="punt-explanation-icon">💡</div>
+            <div className="punt-explanation-content">
+              <p className="punt-explanation-title">What is "Punting" in 9-Cat Fantasy?</p>
+              <p className="punt-explanation-text">
+                <strong>Punting</strong> means intentionally deprioritizing 1-2 categories to dominate the others. 
+                Since 9-cat leagues award wins based on category totals (not overall stats), focusing your roster 
+                on 7-8 categories can be more effective than being mediocre across all 9.
+              </p>
+              <p className="punt-explanation-warning">
+                ⚠️ <strong>Note:</strong> Punting is a strategic choice, not mandatory. It depends on your league format, 
+                roster construction, and trading opportunities. Use this as a guide, not a rule.
               </p>
             </div>
-            <div className="focus-section">
-              <h3 className="focus-section-title">Keep Focus (3-4 categories)</h3>
-              <div className="focus-badges">
-                {keepFocus.map((cat) => (
-                  <div key={cat.key} className="focus-badge">
-                    <div className="focus-badge-category">{categoryLabels[cat.key]}</div>
-                    <div className="focus-badge-reason">
-                      Rank #{cat.rank} / {totalTeams} • z: {cat.zScore.toFixed(2)}
-                    </div>
+          </div>
+          
+          <div className="punt-strategy-grid">
+            <div className="punt-section">
+              <h3 className="punt-section-title">Consider Punting</h3>
+              <p className="punt-section-subtitle">These are your weakest categories—you could deprioritize them to strengthen others</p>
+              <div className="punt-badges-modern">
+                {puntCandidates.map((cat) => (
+                  <div key={cat.key} className="punt-badge-modern">
+                    <div className="badge-rank-large">#{cat.rank}</div>
+                    <div className="badge-category-large">{categoryLabels[cat.key]}</div>
+                    <div className="badge-total-teams">out of {totalTeams} teams</div>
                   </div>
                 ))}
               </div>
-              <p className="focus-note">
-                These are your strongest categories. Double down here to secure wins.
-              </p>
+            </div>
+            
+            <div className="focus-section">
+              <h3 className="focus-section-title">Double Down Here</h3>
+              <p className="focus-section-subtitle">Your strongest categories—reinforce these to dominate matchups</p>
+              <div className="focus-badges-modern">
+                {keepFocus.map((cat) => (
+                  <div key={cat.key} className="focus-badge-modern">
+                    <div className="badge-rank-large strength">#{cat.rank}</div>
+                    <div className="badge-category-large">{categoryLabels[cat.key]}</div>
+                    <div className="badge-total-teams">out of {totalTeams} teams</div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </Card>

@@ -875,8 +875,15 @@ export default function Dashboard() {
                           )}
                           <div className="player-details">
                             <div className="player-name">{player.fullName}</div>
-                            <div className={`player-role ${roleClass}`}>
-                              {player.role?.label || "Roster Player"}
+                            <div className="player-meta-row">
+                              <div className={`player-role ${roleClass}`}>
+                                {player.role?.label || "Roster Player"}
+                              </div>
+                              {player.positions && player.positions.length > 0 && (
+                                <div className="player-positions">
+                                  {player.positions.join(", ")}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>

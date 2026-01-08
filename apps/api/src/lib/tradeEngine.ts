@@ -908,7 +908,7 @@ function isLopsidedTrade(
   const theirRecvPTV = theirRecvPlayers.reduce((s, p) => s + (p.ptv || 0), 0);
   
   const myNetPTV = myRecvPTV - mySendPTV;
-  const theirNetPTV = theirSendPTV - theirRecvPTV; // Their perspective (they send to me, receive from me)
+  const theirNetPTV = theirRecvPTV - theirSendPTV; // FIXED: Their get minus their give (opposite of mine)
   
   // 1) PTV imbalance check - absolute
   const maxAbsPTV = CONFIG.PTV_ABS_MAX;
@@ -1204,7 +1204,7 @@ function filterTrades(
     // Calculate PTV-based fairness ratio (both sides of the trade)
     const theirSendPTV = mySendPlayers.reduce((s, p) => s + (p.ptv || 0), 0);  // Actually their players
     const theirRecvPTV = myRecvPlayers.reduce((s, p) => s + (p.ptv || 0), 0);  // Actually my players
-    const theirNetPTV = theirSendPTV - theirRecvPTV;  // Their send minus their receive (opposite of mine)
+    const theirNetPTV = theirRecvPTV - theirSendPTV;  // FIXED: Their get minus their give (should be negative of mine)
     const myNetPTV = myRecvPTV - mySendPTV;
     
     // Both sides must have reasonable net PTV (not crushing one side)
