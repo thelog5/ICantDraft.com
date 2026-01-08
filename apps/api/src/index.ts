@@ -1196,12 +1196,12 @@ function extractPlayerSchedule(
   
   // Filter to scoring period
   for (const gameDate of teamGames) {
-    const gameDateUTC = new Date(Date.UTC(gameDate.getFullYear(), gameDate.getMonth(), gameDate.getDate()));
-    
-    if (gameDateUTC >= periodStartUTC && gameDateUTC <= periodEndUTC) {
-      gameDates.push(gameDateUTC);
-    }
-  }
+        const gameDateUTC = new Date(Date.UTC(gameDate.getFullYear(), gameDate.getMonth(), gameDate.getDate()));
+        
+        if (gameDateUTC >= periodStartUTC && gameDateUTC <= periodEndUTC) {
+          gameDates.push(gameDateUTC);
+        }
+      }
   
   return gameDates;
 }
