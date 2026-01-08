@@ -764,9 +764,9 @@ export default function Dashboard() {
             )}
           </Card>
 
-          {/* Streaming / Pickups Suggestions */}
+          {/* Streaming Suggestions */}
           <Card className="dashboard-card streaming-pickups-card">
-            <h2 className="card-title">Streaming / Pickups Suggestions</h2>
+            <h2 className="card-title">Streaming Suggestions</h2>
             <div className="streaming-pickups-content">
               <p className="streaming-pickups-placeholder">
                 Player recommendations and streaming suggestions will be available here soon.

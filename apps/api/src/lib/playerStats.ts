@@ -334,18 +334,18 @@ export function extractNineCatFromPlayerMeta(meta: any, seasonYear: number | nul
     return typeof v === "number" && Number.isFinite(v) ? v : 0;
   };
 
-  // ESPN stat key mapping (from analytics.ts)
+  // ESPN stat key mapping (CORRECTED)
   let pts = get("0");
   let stl = get("1");
   let blk = get("2");
-  let threes = get("3");
-  let ast = get("4");
+  let ast = get("3");  // FIXED: "3" is assists!
   let reb = get("6");
   let tov = get("11");
   let fgm = get("13");
   let fga = get("14");
   let ftm = get("15");
   let fta = get("16");
+  let threes = get("17");  // Trying "17" for 3PM
 
   // Extract games played using comprehensive method
   let gp = extractGamesPlayed(selectedBlock, st);
@@ -370,14 +370,14 @@ export function extractNineCatFromPlayerMeta(meta: any, seasonYear: number | nul
         pts = getProj("0");
         stl = getProj("1");
         blk = getProj("2");
-        threes = getProj("3");
-        ast = getProj("4");
+        ast = getProj("3");  // FIXED: "3" is assists!
         reb = getProj("6");
         tov = getProj("11");
         fgm = getProj("13");
         fga = getProj("14");
         ftm = getProj("15");
         fta = getProj("16");
+        threes = getProj("17");  // Trying "17" for 3PM
         
         // Try to extract GP from projections
         gp = extractGamesPlayed(selectedBlock, st);
@@ -415,6 +415,18 @@ export function extractNineCatFromPlayerMeta(meta: any, seasonYear: number | nul
     fta,
     gp: Math.max(1, gp), // At least 1 to avoid divide-by-zero
   };
+  
+  // Debug: Verify stat ID mappings are correct
+  if (meta?.fullName?.includes("LeBron")) {
+    console.log(`[Stat ID Debug - LeBron]:`, {
+      statsSource,
+      gp,
+      'PTS (0)': pts, 'pts/gp': pts/gp,
+      'AST (3)': ast, 'ast/gp': ast/gp,
+      '3PM (17)': threes, '3pm/gp': threes/gp,
+      'REB (6)': reb, 'reb/gp': reb/gp
+    });
+  }
 
   // For projections with 0 GP, check if averageStats has per-game values
   let perGame: PlayerNineCatStats;
@@ -429,7 +441,7 @@ export function extractNineCatFromPlayerMeta(meta: any, seasonYear: number | nul
       // Try to get per-game stats directly from averageStats
       const avgPts = getAvg("0");
       const avgReb = getAvg("6");
-      const avgAst = getAvg("4");
+      const avgAst = getAvg("40");  // ESPN uses "40" for assists, not "4"
       const avgStl = getAvg("1");
       const avgBlk = getAvg("2");
       const avgThrees = getAvg("3");

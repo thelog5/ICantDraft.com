@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import TopNav from "../components/TopNav";
 import { useActiveContext } from "../hooks/useActiveContext";
 import { api, ApiError } from "../lib/api";
@@ -38,6 +39,7 @@ type TeamProjectionSummary = {
 
 export default function WeeklyProjections() {
   const { loading: contextLoading, ctx } = useActiveContext();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [projections, setProjections] = useState<Awaited<ReturnType<typeof api.getWeeklyProjections>> | null>(null);
@@ -235,6 +237,65 @@ export default function WeeklyProjections() {
     return value.toFixed(1);
   };
 
+  // Compute contention (closest categories)
+  type ContestedCategory = {
+    key: string;
+    label: string;
+    myValue: number;
+    oppValue: number;
+    delta: number;
+    absDelta: number;
+    isPercentage: boolean;
+    isFavored: boolean;
+    isTurnover: boolean;
+  };
+
+  const contestedCategories: ContestedCategory[] = [];
+
+  if (projections.opponent) {
+    categoryKeys.forEach((key) => {
+      const myValue = projections.team.projectedTotals[key];
+      const oppValue = projections.opponent!.projectedTotals[key];
+      const isPercentage = key === "fgPct" || key === "ftPct";
+      const isTurnover = key === "tov";
+
+      let delta: number;
+      let absDelta: number;
+
+      if (isPercentage) {
+        // For percentages, compute difference in percentage points
+        delta = myValue - oppValue;
+        absDelta = Math.abs(delta);
+      } else {
+        // For counting stats, raw difference
+        delta = myValue - oppValue;
+        absDelta = Math.abs(delta);
+      }
+
+      // Determine if favored
+      // For TO, lower is better
+      const isFavored = isTurnover ? myValue < oppValue : myValue > oppValue;
+
+      contestedCategories.push({
+        key,
+        label: categoryLabels[key],
+        myValue,
+        oppValue,
+        delta,
+        absDelta,
+        isPercentage,
+        isFavored,
+        isTurnover,
+      });
+    });
+
+    // Sort by smallest absolute difference (most contested)
+    contestedCategories.sort((a, b) => a.absDelta - b.absDelta);
+  }
+
+  // Take top 3-4 (let's do 4)
+  const topContested = contestedCategories.slice(0, 4);
+
   return (
     <TopNav>
       <div className="weekly-projections-page">
@@ -329,8 +390,72 @@ export default function WeeklyProjections() {
           </Card>
         )}
 
+        {/* Biggest Contention */}
+        <Card className="biggest-contention-card">
+          <h2 className="card-title">Biggest Contention</h2>
+          {projections.opponent ? (
+            <>
+              <p className="contention-description">
+                These are the closest categories in your matchup — small swings can decide the outcome.
+              </p>
+              <div className="contested-categories-grid">
+                {topContested.map((cat) => (
+                  <div
+                    key={cat.key}
+                    className={`contested-category-pill ${cat.isFavored ? "favored" : "behind"}`}
+                  >
+                    <div className="contested-cat-label">{cat.label}</div>
+                    <div className="contested-cat-values">
+                      <div className="value-with-label">
+                        <span className="value-owner-label">You</span>
+                        <span className="my-value">
+                          {cat.isPercentage ? (cat.myValue * 100).toFixed(1) + "%" : cat.myValue.toFixed(1)}
+                        </span>
+                      </div>
+                      <span className="vs-separator">vs</span>
+                      <div className="value-with-label">
+                        <span className="value-owner-label">Them</span>
+                        <span className="opp-value">
+                          {cat.isPercentage ? (cat.oppValue * 100).toFixed(1) + "%" : cat.oppValue.toFixed(1)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="contested-cat-delta">
+                      <span className={`delta-badge ${cat.isFavored ? "positive" : "negative"}`}>
+                        {cat.isFavored ? "↑" : "↓"}{" "}
+                        {cat.isPercentage
+                          ? `${Math.abs(cat.delta * 100).toFixed(1)}pp`
+                          : cat.delta > 0
+                          ? `+${cat.delta.toFixed(1)}`
+                          : cat.delta.toFixed(1)}
+                      </span>
+                      <span className="advantage-indicator">
+                        {cat.isFavored ? "Ahead" : "Behind"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="contention-cta">
+                <p className="cta-text">Streaming targets should focus on these cats.</p>
+                <button className="cta-button" onClick={() => navigate("/streaming")}>
+                  Go to Streaming →
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="no-opponent-message">
+              No opponent matchup found — contention analysis unavailable.
+            </p>
+          )}
+        </Card>
+
         {/* Chart */}
         <Card className="weekly-projections-card-full">
+          <h2 className="card-title">Category Comparison</h2>
+          <p className="chart-description">
+            Compare your projected stats against your opponent and the league average across all 9 categories.
+          </p>
           <div className="weekly-projections-content-full">
             <div className="weekly-chart-container-full">
               <WeeklyBarChart data={weeklyData} />

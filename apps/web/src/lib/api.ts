@@ -654,4 +654,467 @@ export const api = {
       `${API_BASE_URL}/leagues/${leagueId}/teams/${teamId}/trade-suggestions${query ? `?${query}` : ""}`
     );
   },
+
+  async getFreeAgents(leagueId: string, options?: {
+    limit?: number;
+    search?: string;
+    positions?: string;
+    includeQuestionable?: boolean;
+  }): Promise<{
+    league: { id: string; name: string };
+    freeAgents: Array<{
+      playerId: string;
+      providerPlayerId: string;
+      fullName: string;
+      positions: string[];
+      headshotUrl: string | null;
+      perGameStats: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        fgPct: number;
+        ftPct: number;
+        tov: number;
+      };
+      weeklyProjection: {
+        projectedGames: number;
+        totals: {
+          pts: number;
+          reb: number;
+          ast: number;
+          stl: number;
+          blk: number;
+          threes: number;
+          tov: number;
+          fgPct: number;
+          ftPct: number;
+        };
+        attempts: {
+          fga: number;
+          fgm: number;
+          fta: number;
+          ftm: number;
+        };
+      };
+      injuryStatus: string;
+      hasStats: boolean;
+    }>;
+    totalCount: number;
+    returnedCount: number;
+  }> {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set("limit", options.limit.toString());
+    if (options?.search) params.set("search", options.search);
+    if (options?.positions) params.set("positions", options.positions);
+    if (options?.includeQuestionable) params.set("includeQuestionable", "true");
+
+    const query = params.toString();
+    return fetchJson(
+      `${API_BASE_URL}/leagues/${leagueId}/free-agents${query ? `?${query}` : ""}`
+    );
+  },
+
+  async calculateStreamingImpact(
+    leagueId: string,
+    data: {
+      teamId: string;
+      opponentTeamId?: string;
+      addPlayerId: string;
+      dropPlayerId: string;
+      scoringPeriodStartDate?: string;
+      scoringPeriodEndDate?: string;
+    }
+  ): Promise<{
+    before: {
+      myTotals: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        fgPct: number;
+        ftPct: number;
+        tov: number;
+      };
+      oppTotals: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        fgPct: number;
+        ftPct: number;
+        tov: number;
+      } | null;
+      matchupResult: { wins: number; losses: number } | null;
+    };
+    after: {
+      myTotals: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        fgPct: number;
+        ftPct: number;
+        tov: number;
+      };
+      oppTotals: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        fgPct: number;
+        ftPct: number;
+        tov: number;
+      } | null;
+      matchupResult: { wins: number; losses: number } | null;
+    };
+    deltas: {
+      totals: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        tov: number;
+        fgPct: number;
+        ftPct: number;
+      };
+      categoryChanges: Array<{
+        key: string;
+        label: string;
+        beforeWin: boolean;
+        afterWin: boolean;
+        flipped: boolean;
+      }>;
+      netCatsWonDelta: number;
+    };
+    explain: {
+      droppedPlayer: {
+        name: string;
+        projectedGames: number;
+        contribution: any;
+      };
+      addedPlayer: {
+        name: string;
+        projectedGames: number;
+        contribution: any;
+      };
+    };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/leagues/${leagueId}/streaming/impact`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      throw new ApiError(`Failed to calculate streaming impact: ${response.statusText}`, response.status);
+    }
+    return response.json();
+  },
+
+  async getStreamingOverview(leagueId: string, teamId: string): Promise<{
+    status: "ok" | "error";
+    errorCode?: string;
+    message?: string;
+    details?: string;
+    meta: {
+      weekId: number;
+      scoringPeriodId: number;
+      startDateISO: string;
+      endDateISO: string;
+      addsLimit: number | null;
+      addsUsed: number | null;
+      addsRemaining: number | null;
+    };
+    matchupSnapshot: {
+      projectedScore: { wins: number; losses: number; ties: number };
+      categories: Array<{
+        key: string;
+        label: string;
+        myTotal: number;
+        oppTotal: number;
+        closeness: "close" | "likely_win" | "likely_loss";
+        margin: number;
+        marginPct: number;
+        isFlippable: boolean;
+      }>;
+      closeCategories: any[];
+      flippableCategories: any[];
+    } | null;
+    targets: {
+      contestedCats: string[];
+      recommendedCats: string[];
+    };
+    dailyRecommendations: Array<{
+      dateISO: string;
+      label: string;
+      youGames: number;
+      oppGames: number;
+      freeAgentsPlayingCount: number;
+      recommendations: Array<{
+        addPlayerId: string;
+        addPlayerName: string;
+        addReason: string;
+        addBoosts: string[];
+        addFitScore: number;
+        dropPlayerId: string;
+        dropPlayerName: string;
+        dropReason: string;
+        dropRiskLevel: string;
+        mode: string;
+      }>;
+      noRecommendationReason: string | null;
+    }>;
+    freeAgents: Array<{
+      playerId: string;
+      name: string;
+      teamAbbr: string;
+      headshotUrl: string | null;
+      gamesThisWeek: number;
+      gamesByDay: Record<string, boolean>;
+      scheduleText?: string;
+      projectedTotals: any;
+      projectedPerGame: any;
+      boosts: string[];
+      score?: number;
+      fitScore?: number;
+      strengths?: string[];
+      weaknesses?: string[];
+      reason?: string;
+    }>;
+    dropCandidates: Array<{
+      playerId: string;
+      name: string;
+      gamesRemaining: number;
+      nextGameDate: string | null;
+      reason: string;
+      riskLevel: string;
+      perGame: any;
+    }>;
+    roster: Array<{
+      playerId: string;
+      name: string;
+      teamAbbr: string;
+      headshotUrl: string | null;
+      gamesByDay: Record<string, boolean>;
+      gamesRemaining: number;
+      projectedTotals: any;
+      perGame: any;
+      projectedPerGame?: any;
+    }>;
+  }> {
+    const params = new URLSearchParams();
+    params.set("teamId", teamId);
+    return fetchJson(`${API_BASE_URL}/leagues/${leagueId}/streaming/overview?${params.toString()}`);
+  },
+
+  async getStreamingSchedule(leagueId: string, teamId: string, opponentTeamId?: string): Promise<{
+    scoringPeriod: {
+      startDate: string;
+      endDate: string;
+    };
+    days: Array<{
+      date: string;
+      label: string;
+      myGames: number;
+      oppGames: number;
+      myPlayersPlaying: Array<{
+        playerId: string;
+        name: string;
+        headshotUrl: string | null;
+        positions: string[];
+      }>;
+      oppPlayersPlaying?: Array<{
+        playerId: string;
+        name: string;
+        headshotUrl: string | null;
+        positions: string[];
+      }>;
+      freeAgentsPlaying: Array<{
+        playerId: string;
+        name: string;
+        headshotUrl: string | null;
+        positions: string[];
+        gamesThisWeek: number;
+        playsToday: boolean;
+        perGame: any;
+      }>;
+    }>;
+    note: string | null;
+  }> {
+    const params = new URLSearchParams();
+    params.set("teamId", teamId);
+    if (opponentTeamId) params.set("opponentTeamId", opponentTeamId);
+
+    return fetchJson(
+      `${API_BASE_URL}/leagues/${leagueId}/streaming/schedule?${params.toString()}`
+    );
+  },
+
+  async calculateStreamingImpact(
+    leagueId: string,
+    teamId: string,
+    addPlayerId: string,
+    dropPlayerId: string,
+    opponentTeamId?: string
+  ): Promise<{
+    status: "ok" | "error";
+    message?: string;
+    before: any;
+    after: any;
+    deltas: any;
+    matchupResultBefore: { wins: number; losses: number; ties: number } | null;
+    matchupResultAfter: { wins: number; losses: number; ties: number } | null;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/leagues/${leagueId}/streaming/impact`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        teamId,
+        addPlayerId,
+        dropPlayerId,
+        opponentTeamId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.statusText, response.status, await response.text());
+    }
+
+    return response.json();
+  },
+
+  async getStreamingPlan(leagueId: string, teamId: string, opponentTeamId?: string): Promise<{
+    hasScheduleData: boolean;
+    acquisitionLimits: {
+      limit: number | null;
+      used: number | null;
+      remaining: number | null;
+    };
+    contestedCategories: Array<{
+      key: string;
+      label: string;
+      myValue: number;
+      oppValue: number;
+      absDelta: number;
+    }>;
+    dailyPlan: Array<{
+      date: string;
+      suggestedAdd: {
+        playerId: string;
+        name: string;
+        headshotUrl: string | null;
+        projectedStats: any;
+      } | null;
+      suggestedDrop: {
+        playerId: string;
+        name: string;
+      } | null;
+      expectedNetDelta: any;
+      expectedCatsChange: number;
+      reason: string;
+    }>;
+    scoringPeriod?: {
+      startAt: string;
+      endAt: string;
+    };
+    message?: string;
+  }> {
+    const params = new URLSearchParams();
+    params.set("teamId", teamId);
+    if (opponentTeamId) params.set("opponentTeamId", opponentTeamId);
+
+    return fetchJson(
+      `${API_BASE_URL}/leagues/${leagueId}/streaming/plan?${params.toString()}`
+    );
+  },
+
+  async getStreamingRecommendations(leagueId: string, teamId: string): Promise<{
+    contention: Array<{
+      key: string;
+      label: string;
+      myValue: number;
+      oppValue: number;
+      delta: number;
+    }>;
+    topStreamersToday: Array<{
+      playerId: string;
+      providerPlayerId: string;
+      fullName: string;
+      positions: string[];
+      headshotUrl: string | null;
+      projectedGamesRemainingThisWeek: number;
+      projectedTotalsAdd: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        tov: number;
+        fgPct: number;
+        ftPct: number;
+      };
+      addedAttempts: {
+        fga: number;
+        fgm: number;
+        fta: number;
+        ftm: number;
+      };
+      keyCatsBoosted: string[];
+      score: number;
+    }>;
+    suggestedAdds: Array<{
+      playerId: string;
+      providerPlayerId: string;
+      fullName: string;
+      positions: string[];
+      headshotUrl: string | null;
+      projectedGamesRemainingThisWeek: number;
+      projectedTotalsAdd: {
+        pts: number;
+        reb: number;
+        ast: number;
+        stl: number;
+        blk: number;
+        threes: number;
+        tov: number;
+        fgPct: number;
+        ftPct: number;
+      };
+      addedAttempts: {
+        fga: number;
+        fgm: number;
+        fta: number;
+        ftm: number;
+      };
+      keyCatsBoosted: string[];
+      score: number;
+    }>;
+    scheduleAdvantage: {
+      myRemainingGames: number;
+      opponentRemainingGames: number;
+      advantage: number;
+    };
+    tradeAcquisitionLimit: {
+      limit: number | null;
+      used: number | null;
+      remaining: number | null;
+    };
+  }> {
+    return fetchJson(
+      `${API_BASE_URL}/leagues/${leagueId}/streaming/recommendations?teamId=${teamId}`
+    );
+  },
 };
