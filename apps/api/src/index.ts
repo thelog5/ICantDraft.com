@@ -1066,16 +1066,18 @@ function rankRosterForDrops(
     schedule: Date[];
     gamesRemaining: number;
     isCore?: boolean;
+    rosterPct?: number | null;
   }>,
   leagueDist: ReturnType<typeof computeLeagueDistributions>,
   currentDate: Date
 ): Array<{
   player: typeof roster[0];
-  dropScore: number; // Lower = better drop candidate
+  dropScore: number; // Lower = better drop candidate (lower roster%)
   playerValue: number; // Overall PTV value
   reason: string;
   riskLevel: "low" | "medium" | "high";
   nextGameDate: string | null;
+  rosterPct: number | null;
 }> {
   const ranked = roster
     .map((player) => {
@@ -1083,51 +1085,55 @@ function rankRosterForDrops(
       if (player.isCore) return null; // Never drop core players
 
       const perGame = player.stats.perGame;
+      const rosterPct = player.rosterPct ?? null;
 
-      // Calculate weighted stat total (simpler than z-scores)
-      // Weights based on fantasy value
+      // Calculate player value for fallback sorting
       const playerValue =
-        perGame.pts * 1.0 +     // Points: 1x weight
-        perGame.reb * 1.2 +     // Rebounds: 1.2x weight
-        perGame.ast * 1.5 +     // Assists: 1.5x weight
-        perGame.stl * 3.5 +     // Steals: 3.5x weight (scarce)
-        perGame.blk * 3.5 +     // Blocks: 3.5x weight (scarce)
-        perGame.threes * 2.0 +  // 3PM: 2x weight
-        (perGame.fgPct * 100) + // FG%: normalized to 0-100 range
-        (perGame.ftPct * 100) - // FT%: normalized to 0-100 range
-        (perGame.tov * 2.0);    // Turnovers: -2x weight (penalty)
+        perGame.pts * 1.0 +
+        perGame.reb * 1.2 +
+        perGame.ast * 1.5 +
+        perGame.stl * 3.5 +
+        perGame.blk * 3.5 +
+        perGame.threes * 2.0 +
+        (perGame.fgPct * 100) +
+        (perGame.ftPct * 100) -
+        (perGame.tov * 2.0);
 
       // Check if player plays soon
       const upcomingGames = player.schedule.filter((d) => d >= currentDate);
       const nextGameDate = upcomingGames.length > 0 ? upcomingGames[0].toISOString().split('T')[0] : null;
-      const daysUntilNextGame = upcomingGames.length > 0 
-        ? Math.floor((upcomingGames[0].getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24))
-        : 999;
 
-      // Drop score: Simply use negative player value
-      // Lower dropScore = better drop candidate (lower value players)
-      let dropScore = -playerValue;
-      
-      // Slight adjustment for schedule (but keep it simple)
-      if (player.gamesRemaining === 0) {
-        dropScore -= 20; // Much easier to drop if no games left
-      } else if (daysUntilNextGame > 4) {
-        dropScore -= 5; // Easier to drop if not playing soon
+      // Drop score: PRIMARY = roster% (lower is better drop candidate)
+      // For players without roster%, use very high score to place at end
+      let dropScore: number;
+      if (rosterPct !== null) {
+        // Use roster% directly as drop score (0-100 range, lower = better drop)
+        dropScore = rosterPct;
+        
+        // Small bonus if no games remaining (makes them slightly better to drop)
+        if (player.gamesRemaining === 0) {
+          dropScore -= 5;
+        }
+      } else {
+        // No roster% data: use player value as fallback, placing at end
+        // Start at 1000 to ensure they sort after players with roster%
+        dropScore = 1000 - playerValue;
       }
 
-      // Generate reason based on VALUE
+      // Generate reason based on ROSTER%
       let reason = "";
-      const valuePerGame = playerValue.toFixed(1);
-      if (player.gamesRemaining === 0) {
-        reason = "No games remaining this week";
-      } else if (playerValue < 30) {
-        reason = `Lowest value on roster (${valuePerGame} pts/game value)`;
-      } else if (playerValue < 50) {
-        reason = `Below-average production (${valuePerGame})`;
-      } else if (playerValue < 70) {
-        reason = `Modest production (${valuePerGame})`;
+      if (rosterPct === null) {
+        reason = player.gamesRemaining === 0 
+          ? "No games remaining (unknown roster %)"
+          : "Replacement-level player";
+      } else if (rosterPct <= 20) {
+        reason = `${rosterPct.toFixed(0)}% rostered — rarely owned`;
+      } else if (rosterPct <= 40) {
+        reason = `${rosterPct.toFixed(0)}% rostered — low ownership`;
+      } else if (rosterPct <= 60) {
+        reason = `${rosterPct.toFixed(0)}% rostered — moderate ownership`;
       } else {
-        reason = `Limited upside (${valuePerGame})`;
+        reason = `${rosterPct.toFixed(0)}% rostered — widely owned`;
       }
 
       // Deprecated risk level (keeping for backward compatibility)
@@ -1140,16 +1146,27 @@ function rankRosterForDrops(
         reason,
         riskLevel,
         nextGameDate,
+        rosterPct,
       };
     })
     .filter((r) => r !== null);
 
-  // Sort by dropScore ascending (lower = better drop candidate)
+  // Sort by dropScore ascending (lower roster% = better drop candidate)
   ranked.sort((a, b) => a.dropScore - b.dropScore);
 
-  // Exclude top 3 players by value as guardrail
-  const sortedByValue = [...ranked].sort((a, b) => b.playerValue - a.playerValue);
-  const top3Ids = new Set(sortedByValue.slice(0, 3).map(r => r.player.playerId));
+  // Exclude top 3 players by roster% (or value if no roster%) as guardrail
+  const sortedByOwnership = [...ranked].sort((a, b) => {
+    if (a.rosterPct !== null && b.rosterPct !== null) {
+      return b.rosterPct - a.rosterPct; // Higher roster% = more owned
+    } else if (a.rosterPct !== null) {
+      return -1; // a has roster%, prioritize
+    } else if (b.rosterPct !== null) {
+      return 1; // b has roster%, prioritize
+    } else {
+      return b.playerValue - a.playerValue; // Fallback to value
+    }
+  });
+  const top3Ids = new Set(sortedByOwnership.slice(0, 3).map(r => r.player.playerId));
   
   return ranked.filter(r => !top3Ids.has(r.player.playerId));
 }
@@ -1583,6 +1600,12 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
     const rosterForRanking = team.rosterSlots.map((slot) => {
       const stats = extractNineCatFromPlayerMeta(slot.player.meta as any, league.seasonYear);
       const schedule = extractPlayerSchedule(slot.player.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+      
+      // Extract roster percentage from ESPN player meta (if available)
+      const playerMeta = (slot.player.meta as any) || {};
+      const ownership = playerMeta.ownership || {};
+      const rosterPct = typeof ownership.percentOwned === "number" ? ownership.percentOwned : null;
+      
       return {
         playerId: slot.player.id,
         name: slot.player.fullName,
@@ -1590,6 +1613,7 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
         schedule,
         gamesRemaining: schedule.length,
         isCore: false, // TODO: integrate with core player detection
+        rosterPct,
       };
     }).filter((p) => p.stats.hasStats);
 
@@ -1757,6 +1781,7 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
       nextGameDate: r.nextGameDate,
       reason: r.reason,
       riskLevel: r.riskLevel,
+      rosterPct: r.rosterPct,
       perGame: r.player.stats.perGame,
     }));
 
@@ -3933,6 +3958,21 @@ app.post("/ingest/espn", async (_req, res) => {
   const currentMatchupPeriod =
     typeof data?.status?.currentMatchupPeriod === "number" ? data.status.currentMatchupPeriod : null;
 
+  // Extract scoring period dates from current matchup
+  let scoringPeriodStartDate: string | null = null;
+  let scoringPeriodEndDate: string | null = null;
+  
+  if (currentMatchupPeriod !== null) {
+    const currentMatchup = schedule.find((m) => m?.matchupPeriodId === currentMatchupPeriod);
+    if (currentMatchup) {
+      // ESPN provides matchupPeriodStartDate and matchupPeriodEndDate in ISO format
+      scoringPeriodStartDate = currentMatchup.matchupPeriodStartDate || null;
+      scoringPeriodEndDate = currentMatchup.matchupPeriodEndDate || null;
+      
+      console.log(`[Ingestion] Current matchup period ${currentMatchupPeriod}: ${scoringPeriodStartDate} to ${scoringPeriodEndDate}`);
+    }
+  }
+
   const matchupMap = new Map<string, any>();
 
   for (const matchup of schedule) {
@@ -4018,6 +4058,8 @@ app.post("/ingest/espn", async (_req, res) => {
       matchup: matchupData,
       logo: normalizeEspnUrl(teamLogo),
       logoUrl: normalizeEspnUrl(t?.logoUrl ?? null),
+      scoringPeriodStartDate,
+      scoringPeriodEndDate,
     };
 
     const team = await prisma.team.upsert({

@@ -548,22 +548,48 @@ export default function Streaming() {
             {dropCandidates && dropCandidates.length > 0 && (
               <div className="drop-candidates-section">
                 <h3 className="drop-header">💡 Potential Drop Candidates</h3>
+                <p className="drop-explanation">Ranked by roster % — lowest rostered players are safest drops</p>
                 <div className="drop-list">
-                  {dropCandidates.slice(0, 5).map((drop, idx) => {
+                  {dropCandidates.slice(0, 5).map((drop: any, idx) => {
                     const dropRosterPlayer = overview.roster.find(r => r.playerId === drop.playerId);
-                    // Determine value tier for color coding (0-4 scale, 0=worst)
-                    const valueTier = Math.max(0, 4 - idx);
+                    const rosterPct = drop.rosterPct;
+                    
+                    // Determine drop tier based on roster%
+                    let dropTier: string;
+                    let dropLabel: string;
+                    if (rosterPct === null || rosterPct === undefined) {
+                      dropTier = "unknown";
+                      dropLabel = "Unknown";
+                    } else if (rosterPct <= 20) {
+                      dropTier = "best";
+                      dropLabel = "Rare rostered";
+                    } else if (rosterPct <= 40) {
+                      dropTier = "strong";
+                      dropLabel = "Low rostered";
+                    } else if (rosterPct <= 60) {
+                      dropTier = "possible";
+                      dropLabel = "Moderate rostered";
+                    } else {
+                      dropTier = "risky";
+                      dropLabel = "Widely rostered";
+                    }
+                    
                     return (
-                      <div key={drop.playerId} className={`drop-item value-tier-${valueTier}`}>
+                      <div key={drop.playerId} className={`drop-item drop-tier-${dropTier}`}>
                         {dropRosterPlayer?.headshotUrl ? (
                           <img src={dropRosterPlayer.headshotUrl} alt="" className="drop-avatar" />
                         ) : (
                           <div className="drop-avatar-placeholder">{drop.name.substring(0, 2)}</div>
                         )}
                         <div className="drop-info">
-                          <div className="drop-name">{drop.name}</div>
+                          <div className="drop-name-row">
+                            <div className="drop-name">{drop.name}</div>
+                            <span className={`drop-tier-badge tier-${dropTier}`}>{dropLabel}</span>
+                          </div>
                           <div className="drop-reason">{drop.reason}</div>
-                          <div className="drop-meta">{drop.gamesRemaining}g left • Next: {drop.nextGameDate || 'None'}</div>
+                          <div className="drop-meta">
+                            {drop.gamesRemaining}g left • Next: {drop.nextGameDate || 'None'}
+                          </div>
                         </div>
                       </div>
                     );
