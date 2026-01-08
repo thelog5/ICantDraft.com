@@ -1150,6 +1150,42 @@
   color: #e31837;
 }
 
+/* Pagination */
+.trade-pagination-container {
+  margin-top: 1.5rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+.load-more-button {
+  padding: 0.75rem 2rem;
+  fontSize: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: #0066cc;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.load-more-button:hover {
+  background: #0052a3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 102, 204, 0.2);
+}
+
+.load-more-button:active {
+  transform: translateY(0);
+}
+
+.no-more-trades {
+  color: #666;
+  font-size: 0.9375rem;
+  font-style: italic;
+  margin: 0;
+}
+
 @media (max-width: 768px) {
   .trade-players {
     flex-direction: column;
