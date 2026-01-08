@@ -1,115 +1,233 @@
-# ICantDraft.com — Fantasy Basketball Analytics
+# ICantDraft.com — Fantasy Basketball Analytics Platform
 
-ICantDraft.com is a full-stack fantasy basketball analytics platform that ingests ESPN league data and computes deterministic, math-based 9-category analytics. No machine learning, no LLMs — all analytics are math-based, transparent, and reproducible.
+ICantDraft.com is a full-stack fantasy basketball analytics platform that ingests ESPN league data and produces deterministic, math-driven insights for competitive 9-category fantasy basketball leagues.
 
-The goal of this project is to mirror how competitive fantasy basketball leagues are actually evaluated, while being built like a real production system.
+The platform intentionally avoids machine learning and black-box models. All analytics are transparent, reproducible, and derived from well-defined statistical methods that mirror how experienced fantasy managers actually evaluate leagues.
 
 ---
 
-## Features
-- ESPN fantasy league ingestion using authenticated requests
-- Deterministic 9-category (9-cat) fantasy analytics
-- League-wide z-score normalization
+## Project Goals
+
+- Reflect real competitive fantasy basketball decision-making
+- Provide actionable insights rather than raw statistics
+- Maintain deterministic, debuggable analytics
+- Separate season-long evaluation from weekly matchup strategy
+
+---
+
+## Core Features
+
+### League and Team Analytics
+- ESPN fantasy league ingestion via authenticated requests
+- Deterministic 9-category analytics:
+  - Points, Rebounds, Assists, Steals, Blocks, 3PT Made, FG%, FT%, Turnovers (inverted)
+- League-wide normalization using z-scores
 - Attempt-weighted FG% and FT%
 - Inverted turnover scoring
-- League power rankings
-- Individual team profile analytics
-- React dashboard wired directly to backend API
+- Stable season-level category rankings based on per-game averages
+- Team profile pages including:
+  - Category strengths and weaknesses
+  - Relative league rankings
+  - Clear visual breakdowns without exposing raw statistical noise
 
 ---
 
-## Tech Stack
-Backend: Node.js, TypeScript, Express, Prisma, PostgreSQL  
-Frontend: React, Vite, TypeScript  
+### Weekly Matchup Analysis
+- Projected matchup score using weekly projections
+- Live matchup score using current matchup totals
+- Side-by-side projected versus live views
+- Per-category win/loss indicators
+- Closest category detection:
+  - Projected biggest contentions
+  - Live biggest contentions
+- Final focus recommendations that combine:
+  - Projected closeness
+  - Live score volatility
+  - Category swing potential
+
+---
+
+### Streaming (Waiver Pickup) Engine
+- Day-by-day streaming recommendations
+- Free-agent filtering strictly by players active on the selected date
+- Weekly schedule visualization with daily pickup slots
+- Streaming recommendations account for:
+  - Closest contested categories
+  - Category-specific contributions
+  - Avoiding excessive damage to FG% and FT%
+- Impact previews showing how pickups change weekly totals
+- Drop candidate analysis based on player value, not team fit:
+  - Uses roster percentage and relative value
+  - Avoids recommending high-value players as drops
+- Distinction between:
+  - Targeted category streaming
+  - Volume-based streaming
+
+---
+
+### Trade Analysis Engine
+- Balanced, plausible trade suggestions
+- Supports single-player and multi-player trades
+- Evaluates impact for both teams
+- Trade grading for each side
+- Metrics include:
+  - Team score delta
+  - Average category placement change
+  - Category-level gains and losses
+- Filters prevent unrealistic or lopsided trades
+- Paginated results with relevance-based ordering
+
+---
+
+### Strategy Guidance
+- Punt strategy recommendations derived from:
+  - Category rankings
+  - Relative league positioning
+- Clear explanations of what punting means and when it is appropriate
+- Strategy surfaced without exposing raw z-scores to users
+
+---
+
+### Dashboard
+- Centralized dashboard displaying:
+  - Trade recommendations
+  - Streaming opportunities
+  - Matchup status
+- Designed for fast decision-making rather than data overload
 
 ---
 
 ## Analytics Model
-The platform uses a standard 9-category fantasy basketball scoring model:
-Points, Rebounds, Assists, Steals, Blocks, 3PT Made, FG%, FT%, Turnovers (inverted).
 
-Analytics flow:
-1. Player stats are aggregated into team totals
-2. League-wide means and standard deviations are computed
-3. Teams receive per-category z-scores
-4. Z-scores are converted into win probabilities via a normal CDF
-5. Category probabilities are summed into a normalized 0–9 team score
+The platform uses a standard 9-category fantasy basketball scoring framework:
+
+- Points
+- Rebounds
+- Assists
+- Steals
+- Blocks
+- 3PT Made
+- FG%
+- FT%
+- Turnovers (inverted)
+
+### Season-Level Analysis
+- Uses per-game averages rather than cumulative totals
+- Prevents week-to-week ranking volatility
+- FG% and FT% computed using weighted makes and attempts
+
+### Weekly Matchups
+- Weekly projections used for forward-looking analysis
+- Live totals used for real-time matchup state
+- Category outcomes evaluated independently
 
 All calculations are deterministic and computed server-side.
 
 ---
 
-## Local Development
+## Tech Stack
 
-Prerequisites:
-Node.js 18+
-pnpm 9+
-PostgreSQL
+### Backend
+- Node.js
+- TypeScript
+- Express
+- Prisma
+- PostgreSQL
+
+### Frontend
+- React
+- Vite
+- TypeScript
 
 ---
 
-### Environment setup:
-Create a .env file in the repository root (do NOT commit it):
+## Local Development
+
+### Prerequisites
+- Node.js 18+
+- pnpm 9+
+- PostgreSQL
+
+---
+
+### Environment Setup
+
+Create a `.env` file in the repository root (do not commit it):
 
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/draftsite?schema=public"
 PORT=3000
 
-# ESPN authentication (from browser cookies)
 ESPN_LEAGUE_ID="YOUR_LEAGUE_ID"
 ESPN_SEASON_ID="2026"
 ESPN_S2="YOUR_ESPN_S2_COOKIE"
 ESPN_SWID="{YOUR_SWID_COOKIE}"
 
-# Optional
 ESPN_PLATFORM_VERSION="ec4491ff98dc3a672229031f460410e0746d6ecc"
 ESPN_BASE_URL="https://lm-api-reads.fantasy.espn.com"
+### Install Dependencies
 
-Sensitive values are excluded via .gitignore.
-```
-
----
-
-### Install
 pnpm install
 
 ---
 
 ### Database Setup
+
 pnpm prisma:generate
 pnpm prisma:migrate
 
 ---
 
-### Run API
+### Run Backend API
+
 pnpm -C apps/api dev
-API runs on http://localhost:3000
+
+API runs on:
+http://localhost:3000
 
 ---
 
-### Run Web
+### Run Frontend
+
 pnpm -C apps/web dev
-Web runs on http://localhost:5173
+
+Web runs on:
+http://localhost:5173
 
 ---
 
-## Project Structure
-apps/api  — Express API + analytics engine  
-apps/web  — React + Vite frontend  
-prisma    — Database schema and migrations  
-docs      — Architecture notes and screenshots (optional)
+### Project Structure
+
+apps/api   — Express API and analytics engine  
+apps/web   — React and Vite frontend  
+prisma     — Database schema and migrations  
+docs       — Architecture notes and screenshots (optional)
 
 ---
 
-## Design Principles
+### Design Principles
+
 - Deterministic analytics only
 - No black-box models
-- Attempt-weighted percentages
+- Transparent statistical methods
+- Attempt-weighted shooting percentages
 - Inverted turnover scoring
-- Clear separation between ingestion, analytics, and UI
-- Built like a real backend-driven system
+
+Clear separation between:
+- Season evaluation
+- Weekly matchup analysis
+- Streaming decisions
+
+Built like a production backend system.
 
 ---
 
-## Status
-DraftSite is under active development. Current focus areas include UI refinement, analytics expansion, and performance improvements.
+### Status
+
+ICantDraft.com is under active development.
+
+Current focus areas include:
+- Refining trade balance logic
+- Improving streaming heuristics
+- UI clarity and performance
+- Validation and debugging tooling
