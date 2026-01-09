@@ -3,7 +3,7 @@
   "buildCommand": "pnpm build",
   "functions": {
     "api/index.ts": {
-      "includeFiles": "dist/**"
+      "runtime": "@vercel/node"
     }
   },
   "rewrites": [
