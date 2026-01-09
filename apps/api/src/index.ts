@@ -72,12 +72,25 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.use((req, res, next) => {
+  // Get origin from request or env
+  const requestOrigin = req.headers.origin;
   const webOrigin = process.env.WEB_ORIGIN || process.env.CORS_ORIGIN || "http://localhost:5173";
-  res.header("Access-Control-Allow-Origin", webOrigin);
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (req.method === "OPTIONS") return res.sendStatus(200);
+  
+  // Allow the web origin or the request origin (for CORS)
+  const allowedOrigin = requestOrigin && (
+    requestOrigin.includes('vercel.app') || 
+    requestOrigin.includes('localhost') ||
+    requestOrigin === webOrigin
+  ) ? requestOrigin : webOrigin;
+  
+  (res as any).header("Access-Control-Allow-Origin", allowedOrigin);
+  (res as any).header("Access-Control-Allow-Credentials", "true");
+  (res as any).header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  (res as any).header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  
+  if (req.method === "OPTIONS") {
+    return (res as any).sendStatus(200);
+  }
   next();
 });
 
@@ -5939,6 +5952,15 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
   return res.status(200).json(response);
 });
 
+
+// Health check endpoint
+app.get("/health", (_req, res) => {
+  (res as any).json({ 
+    ok: true, 
+    status: "healthy",
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Root route
 app.get("/", (_req, res) => {

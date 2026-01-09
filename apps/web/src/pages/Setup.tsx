@@ -139,6 +139,30 @@ export default function Setup() {
       }
 
       // Otherwise, fetch from API
+      // First, test if API is reachable
+      try {
+        const healthCheck = await fetch(`${API_BASE}/health`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        
+        if (!healthCheck.ok) {
+          throw new Error(`API health check failed: ${healthCheck.status}`);
+        }
+      } catch (healthErr: any) {
+        console.error('API health check failed:', healthErr);
+        setError(
+          `Cannot connect to API at ${API_BASE}. ` +
+          `Please verify:\n` +
+          `1. API is deployed and running\n` +
+          `2. VITE_API_BASE_URL is set correctly in Vercel\n` +
+          `3. CORS is configured to allow requests from this domain`
+        );
+        setLoading(false);
+        return;
+      }
+
+      // Now fetch demo info
       let response: Response;
       let data: any;
       
@@ -165,8 +189,8 @@ export default function Setup() {
       } catch (err: any) {
         console.error('Demo fetch error:', err);
         setError(
-          err.message?.includes('fetch') 
-            ? `Failed to connect to API at ${API_BASE}. Check your VITE_API_BASE_URL environment variable.`
+          err.message?.includes('fetch') || err.message?.includes('Failed to fetch')
+            ? `Failed to fetch from API at ${API_BASE}. This is likely a CORS issue. Check that WEB_ORIGIN is set in your API's Vercel environment variables.`
             : err.message || 'Failed to start demo mode. Please check your API configuration.'
         );
         setLoading(false);
