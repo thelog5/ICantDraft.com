@@ -1005,26 +1005,26 @@ function playerBoostsCategory(perGame: Record<NineCatKey, number>, cat: NineCatK
   const value = perGame[cat];
   if (typeof value !== 'number') return false;
   
-  // Category-specific thresholds
+  // Lower thresholds for free agents (waiver wire players are less productive)
   switch (cat) {
     case 'pts':
-      return value >= 12.0; // At least 12 PPG
+      return value >= 8.0; // At least 8 PPG
     case 'reb':
-      return value >= 5.0; // At least 5 RPG
+      return value >= 4.0; // At least 4 RPG
     case 'ast':
-      return value >= 3.0; // At least 3 APG
+      return value >= 2.5; // At least 2.5 APG
     case 'stl':
-      return value >= 0.8; // At least 0.8 SPG
+      return value >= 0.6; // At least 0.6 SPG
     case 'blk':
-      return value >= 0.8; // At least 0.8 BPG
+      return value >= 0.5; // At least 0.5 BPG
     case 'threes':
-      return value >= 1.5; // At least 1.5 3PM per game
+      return value >= 1.0; // At least 1 3PM per game
     case 'fgPct':
-      return value >= 0.48; // At least 48% FG
+      return value >= 0.42; // At least 42% FG
     case 'ftPct':
-      return value >= 0.78; // At least 78% FT
+      return value >= 0.70; // At least 70% FT
     case 'tov':
-      return value <= 1.5; // Low turnovers (lower is better)
+      return value <= 2.0; // Low turnovers (lower is better)
     default:
       return false;
   }
@@ -1042,7 +1042,7 @@ function rankFreeAgentsForAdds(
     gamesThisWeek: number;
     injuryStatus: string;
   }>,
-  contestedCategories: Array<{ key: NineCatKey; normalizedDelta: number }>,
+  contestedCategories: Array<{ key: NineCatKey; normalizedDelta: number; weight?: number }>,
   targetDate?: Date
 ): Array<{
   player: typeof freeAgents[0];
@@ -1059,36 +1059,101 @@ function rankFreeAgentsForAdds(
       
       const perGame = player.stats.perGame;
       
-      // Calculate score based on contested categories
-      let contestedScore = 0;
+      // Calculate score based on contested categories - PRIORITIZE FOCUS CATEGORIES
+      let focusScore = 0;
       const boosts: NineCatKey[] = [];
       
+      // Lower thresholds for free agents (waiver wire players are less productive)
+      const thresholds: Record<NineCatKey, number> = {
+        pts: 8, reb: 4, ast: 2.5, stl: 0.6, blk: 0.5, threes: 1.0, fgPct: 0.42, ftPct: 0.70, tov: 2.0
+      };
+      
       for (const cat of contestedCategories) {
-        if (playerBoostsCategory(perGame, cat.key)) {
-          // Weight by how contested the category is (smaller normalizedDelta = more important)
-          const weight = 1 / (cat.normalizedDelta + 0.01);
-          const contribution = perGame[cat.key];
-          contestedScore += Math.abs(contribution) * weight;
-          boosts.push(cat.key);
+        const key = cat.key;
+        const isPct = key === "fgPct" || key === "ftPct";
+        const isTov = key === "tov";
+        
+        // Get category weight (closer categories = higher weight)
+        // Default weight is based on normalized delta (smaller = more important)
+        const catWeight = cat.weight ?? (1 / (cat.normalizedDelta + 0.05));
+        
+        if (isPct) {
+          // For percentages: small positive contribution if above threshold, negative if below
+          const threshold = thresholds[key];
+          if (perGame[key] >= threshold) {
+            // Good percentage player - small bonus
+            focusScore += catWeight * 2;
+            boosts.push(key);
+          } else if (perGame[key] < threshold - 0.05) {
+            // Bad percentage player - penalty (but reduced)
+            focusScore -= catWeight * 1;
+          }
+        } else if (!isTov) {
+          // For counting stats: weight by per-game average contribution
+          const contribution = perGame[key];
+          if (contribution >= thresholds[key]) {
+            // Above threshold = full weight
+            focusScore += contribution * catWeight;
+            boosts.push(key);
+          } else if (contribution >= thresholds[key] * 0.5) {
+            // Partial contribution
+            focusScore += contribution * catWeight * 0.5;
+          }
+        }
+        // Don't consider TOV for streaming focus - can't stream for fewer turnovers
+      }
+
+      // FG%/FT% guardrails - penalize players who "tank" percentages
+      let pctPenalty = 0;
+      const FGM_THRESHOLD = 3; // Significant shooting volume
+      const FTM_THRESHOLD = 1.5;
+      
+      // Estimate FGM/FGA from typical relationships
+      const estimatedFGA = perGame.pts * 0.7 - perGame.threes * 0.7 - (perGame.ftPct > 0 ? 2 : 0);
+      const estimatedFGM = estimatedFGA * perGame.fgPct;
+      
+      if (estimatedFGM > FGM_THRESHOLD) {
+        // Meaningful shooting volume
+        if (perGame.fgPct < 0.40) {
+          // Tank FG% warning - significant penalty
+          pctPenalty += 15;
+        } else if (perGame.fgPct < 0.42) {
+          // Moderate FG% concern
+          pctPenalty += 8;
+        }
+      }
+      
+      // Estimate FTM from FT%
+      const estimatedFTA = perGame.pts * 0.15;
+      const estimatedFTM = estimatedFTA * perGame.ftPct;
+      
+      if (estimatedFTM > FTM_THRESHOLD) {
+        // Meaningful FT volume
+        if (perGame.ftPct < 0.65) {
+          // Tank FT% warning - significant penalty
+          pctPenalty += 12;
+        } else if (perGame.ftPct < 0.70) {
+          // Moderate FT% concern
+          pctPenalty += 6;
         }
       }
 
-      // Calculate overall value score
+      // Calculate overall value score (secondary consideration)
       const valueScore =
-        perGame.pts * 1.0 +
-        perGame.reb * 1.2 +
-        perGame.ast * 1.5 +
-        perGame.stl * 3.0 +
-        perGame.blk * 3.0 +
-        perGame.threes * 2.0 +
-        (perGame.fgPct > 0.45 ? 5 : 0) +
-        (perGame.ftPct > 0.75 ? 3 : 0) -
-        perGame.tov * 1.5;
+        perGame.pts * 0.8 +
+        perGame.reb * 1.0 +
+        perGame.ast * 1.2 +
+        perGame.stl * 2.5 +
+        perGame.blk * 2.5 +
+        perGame.threes * 1.5 +
+        (perGame.fgPct > 0.45 ? 3 : 0) +
+        (perGame.ftPct > 0.75 ? 2 : 0) -
+        perGame.tov * 1.0;
 
       // Identify strengths (top 3 categories)
       const catValues: Array<{ key: NineCatKey; value: number }> = [
         { key: "pts", value: perGame.pts },
-        { key: "reb", value: perGame.reb * 2 }, // Weight rebounds higher
+        { key: "reb", value: perGame.reb * 2 },
         { key: "ast", value: perGame.ast * 2.5 },
         { key: "stl", value: perGame.stl * 5 },
         { key: "blk", value: perGame.blk * 5 },
@@ -1103,10 +1168,10 @@ function rankFreeAgentsForAdds(
       if (perGame.fgPct < 0.42) weaknesses.push("fgPct");
       if (perGame.ftPct < 0.70) weaknesses.push("ftPct");
 
-      // Combined score: 60% contested categories + 40% overall value
-      const finalScore = contestedScore * 0.6 + valueScore * 0.4;
+      // Combined score: 70% focus categories + 30% overall value - percentage penalties
+      const finalScore = (focusScore * 0.7 + valueScore * 0.3) - pctPenalty;
 
-      // Fit score (0-100) based on how many contested cats they help
+      // Fit score (0-100) based on how many focus cats they help
       const fitScore = Math.min(100, (boosts.length / Math.max(1, contestedCategories.length)) * 100);
 
       // Generate reason
@@ -1115,6 +1180,11 @@ function rankFreeAgentsForAdds(
         reason = `Boosts ${boosts.slice(0, 2).join(", ")}`;
       } else {
         reason = `Volume streamer (${player.gamesThisWeek}g)`;
+      }
+      
+      // Add percentage warning if applicable
+      if (pctPenalty >= 12) {
+        reason += " ⚠️ FG%/FT% risk";
       }
 
       return {
@@ -1463,16 +1533,30 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
       }
     }
 
-    // Determine contested categories
+    // Determine contested categories (projected)
+    const categoryLabels: Record<NineCatKey, string> = {
+      pts: "PTS", reb: "REB", ast: "AST", stl: "STL", blk: "BLK",
+      threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
+    };
+    const categoryKeys: NineCatKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
+    
+    type ContestedCategory = {
+      key: NineCatKey;
+      label: string;
+      myValue: number;
+      oppValue: number;
+      absDelta: number;
+      normalizedDelta: number;
+      source: "Projected" | "Live" | "Equal";
+      isFavored: boolean;
+    };
+    
+    const projectedContested: ContestedCategory[] = [];
+    const liveContested: ContestedCategory[] = [];
+    let finalStreamingFocus: ContestedCategory[] = [];
     const contestedCategories: NineCatKey[] = [];
+    
     if (oppProjection) {
-      const categoryLabels: Record<NineCatKey, string> = {
-        pts: "PTS", reb: "REB", ast: "AST", stl: "STL", blk: "BLK",
-        threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
-      };
-
-      const categoryKeys: NineCatKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
-      
       const myTotals = myProjection.totals;
       const oppTotals = oppProjection.totals;
       
@@ -1488,19 +1572,80 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
         tov: Math.max(myTotals.tov, oppTotals.tov, 30),
       };
 
-      const deltas = categoryKeys.map((key) => ({
-        key,
-        label: categoryLabels[key],
-        absDelta: Math.abs(myTotals[key] - oppTotals[key]),
-        normalizedDelta: Math.abs(myTotals[key] - oppTotals[key]) / maxValues[key],
-      }));
-
-      deltas.sort((a, b) => a.normalizedDelta - b.normalizedDelta);
-      const topContested = deltas.slice(0, 4);
-      contestedCategories.push(...topContested.map((d) => d.key));
+      // Compute projected contested categories
+      for (const key of categoryKeys) {
+        const myValue = myTotals[key];
+        const oppValue = oppTotals[key];
+        const isPct = key === "fgPct" || key === "ftPct";
+        const isTov = key === "tov";
+        
+        let absDelta: number;
+        if (isPct) {
+          // For percentages: convert to percentage points
+          absDelta = Math.abs(myValue - oppValue) * 100;
+        } else {
+          absDelta = Math.abs(myValue - oppValue);
+        }
+        
+        const normalizedDelta = absDelta / (isPct ? 100 : maxValues[key]);
+        const isFavored = isTov ? myValue < oppValue : myValue > oppValue;
+        
+        projectedContested.push({
+          key,
+          label: categoryLabels[key],
+          myValue,
+          oppValue,
+          absDelta,
+          normalizedDelta,
+          source: "Projected",
+          isFavored,
+        });
+      }
+      
+      // Sort projected by normalized delta (smallest = most contested)
+      projectedContested.sort((a, b) => a.normalizedDelta - b.normalizedDelta);
+      
+      // TODO: If we have live data in the future, compute liveContested similarly
+      // For now, use projected as the live data (same as weekly projections fallback)
+      for (const cat of projectedContested) {
+        liveContested.push({ ...cat, source: "Live" as const });
+      }
+      
+      // Compute Final Streaming Focus by combining projected and live
+      // Exclude turnovers (can't stream for fewer TOs)
+      const streamableKeys = categoryKeys.filter(k => k !== "tov");
+      
+      const combined = streamableKeys.map((key) => {
+        const projectedCat = projectedContested.find(c => c.key === key)!;
+        const liveCat = liveContested.find(c => c.key === key);
+        
+        const projectedDelta = projectedCat.normalizedDelta;
+        const liveDelta = liveCat?.normalizedDelta || projectedDelta;
+        
+        const smallerDelta = Math.min(projectedDelta, liveDelta);
+        const source: "Projected" | "Live" | "Equal" = 
+          projectedDelta < liveDelta ? "Projected" : 
+          projectedDelta > liveDelta ? "Live" : 
+          "Equal";
+        
+        // Use the source with smaller delta
+        const cat = source === "Live" && liveCat ? liveCat : projectedCat;
+        return { 
+          ...cat, 
+          normalizedDelta: smallerDelta,
+          source 
+        };
+      });
+      
+      // Sort by priority delta (smallest = most contested)
+      combined.sort((a, b) => a.normalizedDelta - b.normalizedDelta);
+      finalStreamingFocus = combined.slice(0, 4);
+      
+      // Extract top 4 keys for backward compatibility
+      contestedCategories.push(...finalStreamingFocus.map(c => c.key));
     }
 
-    console.log(`[Streaming Overview] Contested categories:`, contestedCategories);
+    console.log(`[Streaming Overview] Final Streaming Focus:`, finalStreamingFocus.map(c => c.label).join(', '));
 
     // Get ALL free agents (not rostered by anyone)
     const activeRosterSlots = await prisma.rosterSlot.findMany({
@@ -1656,9 +1801,11 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
 
     // Rank free agents and roster for recommendations
     const currentDate = new Date();
-    const contestedCategoriesForRanking = contestedCategories.map((key) => ({
-      key,
-      normalizedDelta: matchupSnapshot?.categories.find((c) => c.key === key)?.marginPct || 0.1,
+    // Use Final Streaming Focus categories with proper weights (smaller delta = higher weight)
+    const contestedCategoriesForRanking = finalStreamingFocus.map((cat) => ({
+      key: cat.key,
+      normalizedDelta: cat.normalizedDelta,
+      weight: 1 / (cat.normalizedDelta + 0.02), // Smaller delta = higher weight
     }));
 
     const freeAgentsForRanking = freeAgents.map((p) => {
@@ -1882,6 +2029,16 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
         contestedCats: contestedCategories,
         recommendedCats: contestedCategories,
       },
+      // Final Streaming Focus - computed from projected + live data
+      finalStreamingFocus: finalStreamingFocus.map((cat) => ({
+        key: cat.key,
+        label: cat.label,
+        myValue: cat.myValue,
+        oppValue: cat.oppValue,
+        absDelta: Number(cat.absDelta.toFixed(2)),
+        source: cat.source,
+        isFavored: cat.isFavored,
+      })),
       dailyRecommendations,
       freeAgents: enhancedFreeAgents,
       dropCandidates,

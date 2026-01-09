@@ -856,6 +856,15 @@ export const api = {
       contestedCats: string[];
       recommendedCats: string[];
     };
+    finalStreamingFocus?: Array<{
+      key: string;
+      label: string;
+      myValue: number;
+      oppValue: number;
+      absDelta: number;
+      source: "Projected" | "Live" | "Equal";
+      isFavored: boolean;
+    }>;
     dailyRecommendations: Array<{
       dateISO: string;
       label: string;
