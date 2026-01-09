@@ -340,6 +340,9 @@ export default function Landing() {
           <p className="footer-copyright">
             © {new Date().getFullYear()} ICantDraft. All rights reserved.
           </p>
+          <p className="footer-made-by">
+            made by the log ✝
+          </p>
         </div>
       </footer>
     </div>

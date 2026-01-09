@@ -4,10 +4,16 @@ import { api } from '../lib/api';
 import { setActiveContext } from '../lib/activeContext';
 import './Setup.css';
 
+// Check if app is in demo mode (from env)
+const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+const DEMO_LEAGUE_ID = import.meta.env.VITE_DEMO_LEAGUE_ID;
+const DEMO_TEAM_ID = import.meta.env.VITE_DEMO_TEAM_ID;
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+
 export default function Setup() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isDemoMode = searchParams.get('demo') === '1';
+  const shouldAutoStartDemo = searchParams.get('demo') === '1';
 
   // Form state
   const [leagueId, setLeagueId] = useState('');
@@ -25,19 +31,26 @@ export default function Setup() {
 
   // Auto-start demo if demo param present
   useEffect(() => {
-    if (isDemoMode) {
+    if (shouldAutoStartDemo) {
       handleDemoStart();
     }
-  }, [isDemoMode]);
+  }, [shouldAutoStartDemo]);
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // In demo mode, don't allow credential submission
+    if (IS_DEMO_MODE) {
+      setError('Demo mode: User credentials are not enabled yet. Use the "Try Demo Now" button to continue.');
+      return;
+    }
+    
     setError(null);
     setLoading(true);
 
     try {
       // Just validate the credentials work and get team list (don't store in backend)
-      const response = await fetch('http://localhost:3000/auth/espn/connect', {
+      const response = await fetch(`${API_BASE}/auth/espn/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -67,6 +80,12 @@ export default function Setup() {
   };
 
   const handleSelectTeam = async () => {
+    // In demo mode, don't allow team selection
+    if (IS_DEMO_MODE) {
+      setError('Demo mode: User credentials are not enabled yet. Use the "Try Demo Now" button to continue.');
+      return;
+    }
+    
     if (!selectedTeam) {
       setError('Please select a team');
       return;
@@ -103,7 +122,24 @@ export default function Setup() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/auth/demo/info', {
+      // If demo mode with env vars, use those directly
+      if (IS_DEMO_MODE && DEMO_LEAGUE_ID && DEMO_TEAM_ID) {
+        // Use env-provided demo IDs
+        setActiveContext({
+          leagueKeyInput: 'demo',
+          teamKeyInput: 'demo',
+          leagueId: DEMO_LEAGUE_ID,
+          teamId: DEMO_TEAM_ID,
+          leagueName: 'Demo League',
+          teamName: 'Demo Team',
+        });
+        
+        navigate('/dashboard');
+        return;
+      }
+
+      // Otherwise, fetch from API
+      const response = await fetch(`${API_BASE}/auth/demo/info`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -254,7 +290,7 @@ export default function Setup() {
 
                 {error && <div className="error-message">{error}</div>}
 
-                <button type="submit" className="btn-submit" disabled={loading}>
+                <button type="submit" className="form-button" disabled={loading}>
                   {loading ? 'Connecting...' : 'Validate & Connect'}
                 </button>
               </form>
@@ -288,7 +324,7 @@ export default function Setup() {
 
                 <button
                   onClick={handleSelectTeam}
-                  className="btn-submit"
+                  className="form-button"
                   disabled={loading || !selectedTeam}
                 >
                   {loading ? 'Continuing...' : 'Continue'}
@@ -319,7 +355,7 @@ export default function Setup() {
 
             <button
               onClick={handleDemoStart}
-              className="btn-demo"
+              className="demo-button"
               disabled={loading}
             >
               {loading ? 'Starting Demo...' : 'Explore with Demo League'}

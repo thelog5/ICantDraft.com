@@ -71,7 +71,9 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "http://localhost:5173");
+  // Allow CORS from frontend - use env var in production
+  const allowedOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
+  res.header("Access-Control-Allow-Origin", allowedOrigin);
   res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
   res.header("Access-Control-Allow-Credentials", "true");
@@ -85,7 +87,41 @@ const prisma = new PrismaClient();
 import authRouter from './routes/auth.js';
 import { cleanupExpiredSessions } from './lib/sessionManager.js';
 
+// ---------- DEMO ROUTES ----------
+import demoRouter from './routes/demo.js';
+import { 
+  demoScopeMiddleware,
+  getLeagueScoped,
+  getTeamScoped,
+  getTeamsScoped,
+  getPlayersScoped,
+  getRosterSlotsScoped 
+} from './middleware/demoScope.js';
+
+// ---------- DEMO MODE ----------
+import { isDemoMode, getDemoConfig } from './lib/demoMode.js';
+
+// Apply demo scope middleware globally
+app.use(demoScopeMiddleware);
+
 app.use('/auth', authRouter);
+app.use('/demo', demoRouter);
+
+// Demo config endpoint
+app.get('/config/demo', (_req, res) => {
+  res.json(getDemoConfig());
+});
+
+// Block debug/ESPN routes in demo mode
+app.use('/debug', (req, res, next) => {
+  if (isDemoMode()) {
+    return res.status(403).json({
+      error: 'Debug endpoints are not available in demo mode',
+      demoMode: true,
+    });
+  }
+  next();
+});
 
 // Cleanup expired sessions every hour
 setInterval(() => {
@@ -325,27 +361,24 @@ app.get("/leagues/:leagueId/teams/:teamId/roster", async (req, res) => {
   const teamId = req.params.teamId;
 
   try {
-    const league = await prisma.league.findUnique({
-      where: { id: leagueId },
-      select: { id: true },
-    });
+    // Use demo scope
+    const demoSnapshotId = req.demoScope?.demoSnapshotId || null;
+
+    const league = await getLeagueScoped(leagueId, demoSnapshotId);
     if (!league) return res.status(404).json({ error: "League not found" });
 
-    const team = await prisma.team.findFirst({
-      where: { id: teamId, leagueId },
-      select: { id: true, name: true },
-    });
-    if (!team) return res.status(404).json({ error: "Team not found or not in league" });
+    const team = await getTeamScoped(teamId, demoSnapshotId);
+    if (!team || team.leagueId !== leagueId) {
+      return res.status(404).json({ error: "Team not found or not in league" });
+    }
 
-    const rosterSlots = await prisma.rosterSlot.findMany({
-      where: { teamId, endAt: null },
-      select: {
-        player: { select: { id: true, fullName: true, providerPlayerId: true, meta: true } },
-      },
-      orderBy: { createdAt: "asc" },
-    });
+    // Get roster slots with demo scope
+    const rosterSlots = await getRosterSlotsScoped(leagueId, teamId, demoSnapshotId);
+    
+    // Filter to only current roster (endAt: null)
+    const currentRosterSlots = rosterSlots.filter(slot => slot.endAt === null);
 
-    const roster = rosterSlots.map((slot) => {
+    const roster = currentRosterSlots.map((slot) => {
       const player = slot.player;
       const meta = (player.meta as any) || {};
       const positions = meta.positions || [];

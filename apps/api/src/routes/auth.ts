@@ -178,40 +178,54 @@ router.post('/espn/select-team', async (req, res) => {
 
 /**
  * GET /auth/demo/info
- * Get demo league/team info (uses existing env credentials)
+ * Get demo league/team info (uses demo snapshot system)
  */
 router.get('/demo/info', async (req, res) => {
   try {
-    const leagueId = process.env.ESPN_LEAGUE_ID;
-    const seasonId = parseInt(process.env.ESPN_SEASON_ID || '2026');
+    // Find the first available demo snapshot
+    const snapshot = await prisma.demoSnapshot.findFirst({
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
 
-    if (!leagueId) {
+    if (!snapshot) {
       return res.status(500).json({
         success: false,
-        message: 'Demo mode not configured.',
+        message: 'Demo mode not configured. No demo snapshots available.',
       });
     }
 
-    // Find the league and first team in the database
+    // Find the demo league for this snapshot
     const league = await prisma.league.findFirst({
       where: {
-        providerLeagueId: leagueId,
-        seasonYear: seasonId,
+        demoSnapshotId: snapshot.id,
       },
       include: {
-        teams: true,
+        teams: {
+          orderBy: {
+            providerTeamId: 'asc',
+          },
+        },
       },
     });
 
     if (!league || league.teams.length === 0) {
       return res.status(500).json({
         success: false,
-        message: 'Demo league not found. Please ensure data has been ingested.',
+        message: 'Demo league not found. Please create a demo snapshot.',
       });
     }
 
-    // Use first team as demo team
-    const demoTeam = league.teams[0];
+    // Find team "bron and em" by name (case insensitive), fallback to team 8 or first team
+    let demoTeam = league.teams.find(team => 
+      team.name.toLowerCase().includes('bron') && team.name.toLowerCase().includes('em')
+    );
+    
+    // Fallback to team 8 (index 7) if not found
+    if (!demoTeam) {
+      demoTeam = league.teams[7] || league.teams[0];
+    }
 
     return res.json({
       success: true,
