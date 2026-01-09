@@ -228,7 +228,17 @@ router.get('/demo/info', async (req, res) => {
       demoTeam = league.teams[7] || league.teams[0];
     }
 
-    return res.json({
+    // Set the demo_snapshot cookie so subsequent requests are scoped correctly
+    const isProduction = process.env.NODE_ENV === 'production';
+    (res as any).cookie('demo_snapshot', snapshot.id, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      path: '/',
+    });
+
+    return (res as any).json({
       success: true,
       leagueId: league.id,
       leagueProviderLeagueId: league.providerLeagueId,
