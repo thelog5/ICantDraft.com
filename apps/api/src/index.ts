@@ -3942,6 +3942,7 @@ app.get("/debug/espn", async (_req, res) => {
   const contentType = (r as any).headers.get("content-type") ?? "";
   const location = (r as any).headers.get("location") ?? "";
   // @ts-ignore - fetch Response type
+  // @ts-ignore - fetch Response type
   const text = await r.text();
 
   return (res as any).status(200).json({
@@ -4214,8 +4215,9 @@ app.post("/ingest/espn", async (_req, res) => {
   });
 
   if (!(r as any).ok) {
+    // @ts-ignore - fetch Response type
     const text = await r.text().catch(() => "");
-    return res.status(502).json({ error: "ESPN fetch failed", status: r.status, snippet: text.slice(0, 300) });
+    return (res as any).status(502).json({ error: "ESPN fetch failed", status: (r as any).status, snippet: text.slice(0, 300) });
   }
 
   const data: any = await r.json();
