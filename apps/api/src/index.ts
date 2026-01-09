@@ -590,6 +590,11 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
     // Get all teams with demo scope
     const allTeamsData = await getTeamsScoped(leagueId, demoSnapshotId);
     
+    if (allTeamsData.length === 0) {
+      console.error(`No teams found for league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
+      return res.status(404).json({ error: "No teams found in league" });
+    }
+    
     // Fetch roster slots for each team with providerPlayerId for headshots
     const allTeams = await Promise.all(allTeamsData.map(async (t: any) => {
       const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
@@ -611,6 +616,11 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
         })),
       };
     }));
+
+    if (allTeams.length === 0) {
+      console.error(`No teams with roster data found for league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
+      return res.status(404).json({ error: "No teams with roster data found" });
+    }
 
     // Get scoring period info from first team's meta (schedule is stored in team meta during ingestion)
     const firstTeamMeta = (allTeams[0]?.meta as any) || {};
@@ -686,7 +696,9 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
     // Get the selected team
     const selectedTeam = allTeams.find((t) => t.id === teamId);
     if (!selectedTeam) {
-      return res.status(404).json({ error: "Team not found" });
+      console.error(`Team not found: ${teamId} in league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
+      console.error(`Available teams: ${allTeams.map(t => t.id).join(', ')}`);
+      return res.status(404).json({ error: `Team not found. Available teams: ${allTeams.length}` });
     }
 
     // Calculate selected team's projection
@@ -4956,10 +4968,14 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
     const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
 
     const league = await getLeagueScoped(leagueId, demoSnapshotId);
-    if (!league) return (res as any).status(404).json({ error: "League not found" });
+    if (!league) {
+      console.error(`League not found: ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
+      return (res as any).status(404).json({ error: "League not found. Please check that the league exists and you have access to it." });
+    }
 
     const team = await getTeamScoped(teamId, demoSnapshotId);
     if (!team || team.leagueId !== leagueId) {
+      console.error(`Team not found: ${teamId} in league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
       return (res as any).status(404).json({ error: "Team not found or not in league" });
     }
 
@@ -4975,7 +4991,11 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
       const slotsWithPlayers = currentSlots.map((slot: any) => {
         return {
           meta: slot.meta,
-          player: { id: slot.playerId, meta: slot.player?.meta || null },
+          player: { 
+            id: slot.playerId, 
+            meta: slot.player?.meta || null,
+            fullName: slot.player?.fullName || null,
+          },
         };
       });
       
@@ -4991,8 +5011,8 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
   for (const t of allTeams) {
     // Filter out IR players from team totals AND slots without player meta
     const activeRosterSlots = t.rosterSlots.filter((slot) => {
-      // Must have player meta to calculate stats
-      if (!slot.player?.meta) return false;
+      // Must have player and player meta to calculate stats
+      if (!slot.player || !slot.player.meta) return false;
       
       const slotMeta = (slot.meta as any) || {};
       const isIR = slotMeta.isIR === true || 
@@ -5004,13 +5024,23 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
     
     // Only calculate stats if we have active roster slots with player meta
     if (activeRosterSlots.length > 0) {
-      const playerStats = activeRosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
-      const totals = aggregateTeam(playerStats);
-      teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
+      try {
+        const playerStats = activeRosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
+        const totals = aggregateTeam(playerStats);
+        teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
+      } catch (err) {
+        console.error(`Error calculating stats for team ${t.id}:`, err);
+        // Skip this team if stats calculation fails
+      }
     }
   }
 
-  if (teamsTotals.length === 0) return res.status(400).json({ error: "No teams with active rosters found" });
+  if (teamsTotals.length === 0) {
+    console.error(`No teams with active rosters found for league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
+    console.error(`Total teams fetched: ${allTeams.length}`);
+    console.error(`Teams with roster slots: ${allTeams.filter(t => t.rosterSlots.length > 0).length}`);
+    return res.status(400).json({ error: "No teams with active rosters found. Please ensure roster data has been ingested and players are not all on IR." });
+  }
 
   const dist = computeLeagueDistributions(teamsTotals);
   const ranksMap = rankTeams(teamsTotals);
@@ -5198,11 +5228,15 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
   const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
   
   const league = await getLeagueScoped(leagueId, demoSnapshotId);
-  if (!league) return (res as any).status(404).json({ error: "League not found" });
+  if (!league) {
+    console.error(`League not found: ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
+    return (res as any).status(404).json({ error: "League not found. Please check that the league exists and you have access to it." });
+  }
 
   // Get my team with demo scope
   const myTeamData = await getTeamScoped(teamId, demoSnapshotId);
   if (!myTeamData || myTeamData.leagueId !== leagueId) {
+    console.error(`Team not found: ${teamId} in league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
     return (res as any).status(404).json({ error: "Team not found or not in league" });
   }
 
@@ -5255,8 +5289,8 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
   const teamsTotals: TeamTotals[] = [];
   for (const t of allTeams) {
     const activeRosterSlots = t.rosterSlots.filter((slot) => {
-      // Must have player meta to calculate stats
-      if (!slot.player?.meta) return false;
+      // Must have player and player meta to calculate stats
+      if (!slot.player || !slot.player.meta) return false;
       
       const slotMeta = (slot.meta as any) || {};
       const isIR = slotMeta.isIR === true || 
@@ -5268,13 +5302,23 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
     
     // Only calculate stats if we have active roster slots with player meta
     if (activeRosterSlots.length > 0) {
-      const playerStats = activeRosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
-      const totals = aggregateTeam(playerStats);
-      teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
+      try {
+        const playerStats = activeRosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
+        const totals = aggregateTeam(playerStats);
+        teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
+      } catch (err) {
+        console.error(`Error calculating stats for team ${t.id}:`, err);
+        // Skip this team if stats calculation fails
+      }
     }
   }
 
-  if (teamsTotals.length === 0) return res.status(400).json({ error: "No teams with active rosters found" });
+  if (teamsTotals.length === 0) {
+    console.error(`No teams with active rosters found for league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
+    console.error(`Total teams fetched: ${allTeams.length}`);
+    console.error(`Teams with roster slots: ${allTeams.filter(t => t.rosterSlots.length > 0).length}`);
+    return res.status(400).json({ error: "No teams with active rosters found. Please ensure roster data has been ingested and players are not all on IR." });
+  }
 
   const leagueDist = computeLeagueDistributions(teamsTotals);
   const ranksMap = rankTeams(teamsTotals);
