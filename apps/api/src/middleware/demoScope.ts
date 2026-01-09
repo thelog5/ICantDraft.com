@@ -218,45 +218,62 @@ export async function getTeamsScoped(
   leagueId: string,
   demoSnapshotId: string | null
 ): Promise<any[]> {
-  // First, check if the league is a demo league (similar to getRosterSlotsScoped)
-  const league = await getPrisma().league.findUnique({
-    where: { id: leagueId },
-    select: { demoSnapshotId: true },
-  });
-  
-  if (!league) {
-    console.error(`[getTeamsScoped] League not found: ${leagueId}`);
+  try {
+    // First, check if the league is a demo league (similar to getRosterSlotsScoped)
+    const league = await getPrisma().league.findUnique({
+      where: { id: leagueId },
+      select: { demoSnapshotId: true },
+    });
+    
+    if (!league) {
+      console.error(`[getTeamsScoped] League not found: ${leagueId}`);
+      return [];
+    }
+    
+    const isDemoLeague = !!league?.demoSnapshotId;
+    
+    const where: any = {
+      leagueId,
+    };
+    
+    // If we have a demoSnapshotId, use it for filtering
+    if (demoSnapshotId) {
+      // In demo mode, restrict to demo snapshot
+      where.demoSnapshotId = demoSnapshotId;
+    } else if (isDemoLeague) {
+      // League is a demo league but no cookie yet - allow demo teams
+      where.demoSnapshotId = league.demoSnapshotId;
+    } else {
+      // In live mode, only allow non-demo teams
+      where.demoSnapshotId = null;
+    }
+    
+    const teams = await getPrisma().team.findMany({
+      where,
+      orderBy: {
+        name: 'asc',
+      },
+    });
+    
+    console.log(`[getTeamsScoped] leagueId: ${leagueId}, demoSnapshotId: ${demoSnapshotId}, isDemoLeague: ${isDemoLeague}, league.demoSnapshotId: ${league?.demoSnapshotId || 'null'}, where.demoSnapshotId: ${where.demoSnapshotId}, found ${teams.length} teams`);
+    
+    // If no teams found, try without demoSnapshotId filter to see if teams exist at all
+    if (teams.length === 0) {
+      const allTeamsInLeague = await getPrisma().team.findMany({
+        where: { leagueId },
+        select: { id: true, name: true, demoSnapshotId: true },
+      });
+      console.log(`[getTeamsScoped] DEBUG: Found ${allTeamsInLeague.length} total teams in league (ignoring demo filter)`);
+      if (allTeamsInLeague.length > 0) {
+        console.log(`[getTeamsScoped] DEBUG: Team demoSnapshotIds: ${allTeamsInLeague.map(t => `${t.name}:${t.demoSnapshotId || 'null'}`).join(', ')}`);
+      }
+    }
+    
+    return teams;
+  } catch (error) {
+    console.error(`[getTeamsScoped] Error fetching teams for league ${leagueId}:`, error);
     return [];
   }
-  
-  const isDemoLeague = !!league?.demoSnapshotId;
-  
-  const where: any = {
-    leagueId,
-  };
-  
-  // If we have a demoSnapshotId, use it for filtering
-  if (demoSnapshotId) {
-    // In demo mode, restrict to demo snapshot
-    where.demoSnapshotId = demoSnapshotId;
-  } else if (isDemoLeague) {
-    // League is a demo league but no cookie yet - allow demo teams
-    where.demoSnapshotId = league.demoSnapshotId;
-  } else {
-    // In live mode, only allow non-demo teams
-    where.demoSnapshotId = null;
-  }
-  
-  const teams = await getPrisma().team.findMany({
-    where,
-    orderBy: {
-      name: 'asc',
-    },
-  });
-  
-  console.log(`[getTeamsScoped] leagueId: ${leagueId}, demoSnapshotId: ${demoSnapshotId}, isDemoLeague: ${isDemoLeague}, league.demoSnapshotId: ${league.demoSnapshotId}, found ${teams.length} teams`);
-  
-  return teams;
 }
 
 /**
