@@ -93,12 +93,14 @@ async function copyToVercel() {
             data: {
               id: team.id,
               leagueId: team.leagueId,
+              provider: (team.provider || provider) as any, // Use league provider as fallback
               providerTeamId: team.providerTeamId,
               name: team.name,
               managerName: team.managerName,
               avatarUrl: team.avatarUrl,
               settings: team.settings,
               meta: team.meta,
+              demoSnapshotId: team.demoSnapshotId,
               createdAt: team.createdAt,
               updatedAt: team.updatedAt,
             },
@@ -111,13 +113,16 @@ async function copyToVercel() {
           await tx.player.create({
             data: {
               id: player.id,
+              provider: (player.provider || provider) as any, // Use league provider as fallback
               providerPlayerId: player.providerPlayerId,
+              fullName: player.fullName || player.name || 'Unknown Player', // fullName is required
               name: player.name,
               teamAbbr: player.teamAbbr,
               positions: player.positions,
               headshotUrl: player.headshotUrl,
               stats: player.stats,
               meta: player.meta,
+              demoSnapshotId: player.demoSnapshotId,
               createdAt: player.createdAt,
               updatedAt: player.updatedAt,
             },
