@@ -27,6 +27,7 @@ export type NineCatTotalsWithAttempts = NineCatTotals & {
 export type WeeklyPlayerProjection = {
   playerId: string;
   playerName: string;
+  headshotUrl?: string | null; // Optional headshot URL
   perGame: {
     pts: number;
     reb: number;
@@ -137,6 +138,7 @@ export async function calculateTeamWeeklyProjection(
     playerProjections.push({
       playerId: player.id,
       playerName: player.fullName,
+      headshotUrl: null, // Will be set by caller if needed
       perGame: playerStats.perGame,
       projectedGames,
       projTotals,

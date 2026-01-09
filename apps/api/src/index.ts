@@ -581,30 +581,36 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
   }
 
   try {
-    const league = await prisma.league.findUnique({
-      where: { id: leagueId },
-      select: { id: true, name: true, seasonYear: true },
-    });
+    // Use demo scope
+    const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
+    
+    const league = await getLeagueScoped(leagueId, demoSnapshotId);
     if (!league) return (res as any).status(404).json({ error: "League not found" });
 
-    // Get all teams for league averages calculation
-    const allTeams = await prisma.team.findMany({
-      where: { leagueId },
-      select: {
-        id: true,
-        name: true,
-        meta: true,
-        providerTeamId: true,
-        rosterSlots: {
-          where: { endAt: null },
-          select: {
-            meta: true,
-            slotLabel: true,
-            player: { select: { id: true, fullName: true, meta: true } },
+    // Get all teams with demo scope
+    const allTeamsData = await getTeamsScoped(leagueId, demoSnapshotId);
+    
+    // Fetch roster slots for each team with providerPlayerId for headshots
+    const allTeams = await Promise.all(allTeamsData.map(async (t: any) => {
+      const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
+      const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
+      return {
+        id: t.id,
+        name: t.name,
+        meta: t.meta,
+        providerTeamId: t.providerTeamId,
+        rosterSlots: currentSlots.map((slot: any) => ({
+          meta: slot.meta,
+          slotLabel: slot.slotLabel,
+          player: {
+            id: slot.playerId,
+            fullName: slot.player?.fullName || 'Unknown',
+            meta: slot.player?.meta || null,
+            providerPlayerId: slot.player?.providerPlayerId || null,
           },
-        },
-      },
-    });
+        })),
+      };
+    }));
 
     // Get scoring period info from first team's meta (schedule is stored in team meta during ingestion)
     const firstTeamMeta = (allTeams[0]?.meta as any) || {};
@@ -696,12 +702,24 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
     const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
     const teamAvatarUrl = await getTeamAvatarUrl(req, selectedTeam.id, demoSnapshotId);
 
+    // Add headshots to team players
+    const teamPlayersWithHeadshots = teamPlayers.map((p: any) => {
+      const teamPlayer = selectedTeam.rosterSlots.find((slot: any) => slot.player.id === p.playerId);
+      const cleanPlayerId = cleanProviderPlayerId(teamPlayer?.player?.providerPlayerId);
+      return {
+        ...p,
+        headshotUrl: cleanPlayerId
+          ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`)
+          : null,
+      };
+    });
+
     const teamProjection: WeeklyTeamProjection = {
       teamId: selectedTeam.id,
       teamName: selectedTeam.name,
       avatarUrl: teamAvatarUrl,
       projectedTotals: teamTotals,
-      players: teamPlayers,
+      players: teamPlayersWithHeadshots,
     };
 
     // Find opponent from schedule
@@ -729,12 +747,24 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
 
         const opponentAvatarUrl = await getTeamAvatarUrl(req, opponent.id, demoSnapshotId);
 
+        // Add headshots to opponent players
+        const opponentPlayersWithHeadshots = opponentPlayers.map((p: any) => {
+          const oppPlayer = opponent.rosterSlots.find((slot: any) => slot.player.id === p.playerId);
+          const cleanPlayerId = cleanProviderPlayerId(oppPlayer?.player?.providerPlayerId);
+          return {
+            ...p,
+            headshotUrl: cleanPlayerId
+              ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`)
+              : null,
+          };
+        });
+
         opponentProjection = {
           teamId: opponent.id,
           teamName: opponent.name,
           avatarUrl: opponentAvatarUrl,
           projectedTotals: opponentTotals,
-          players: opponentPlayers,
+          players: opponentPlayersWithHeadshots,
         };
 
         // Calculate matchup results
@@ -3672,7 +3702,7 @@ app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) =
     const rosterSlotsData = await getRosterSlotsScoped(leagueId, teamId, demoSnapshotId);
     const currentSlots = rosterSlotsData.filter((slot: any) => !slot.endAt);
     
-    // Map to expected format
+    // Map to expected format with providerPlayerId for headshots
     const rosterSlots = currentSlots.map((slot: any) => ({
       meta: slot.meta,
       slotLabel: slot.slotLabel,
@@ -3680,6 +3710,7 @@ app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) =
         id: slot.playerId,
         fullName: slot.player?.fullName || 'Unknown',
         meta: slot.player?.meta || null,
+        providerPlayerId: slot.player?.providerPlayerId || null,
       },
     }));
 
@@ -3738,9 +3769,16 @@ app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) =
         ftPct: playerStats.perGame.ftPct,
       };
       
+      // Generate headshot URL
+      const cleanPlayerId = cleanProviderPlayerId((player as any).providerPlayerId);
+      const headshotUrl = cleanPlayerId
+        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`)
+        : null;
+
       return {
         playerId: player.id,
         playerName: player.fullName,
+        headshotUrl, // Add headshot URL
         perGame: playerStats.perGame,
         projectedGames,
         projTotals,
@@ -4952,8 +4990,11 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
   const teamsTotals: TeamTotals[] = [];
 
   for (const t of allTeams) {
-    // Filter out IR players from team totals
+    // Filter out IR players from team totals AND slots without player meta
     const activeRosterSlots = t.rosterSlots.filter((slot) => {
+      // Must have player meta to calculate stats
+      if (!slot.player?.meta) return false;
+      
       const slotMeta = (slot.meta as any) || {};
       const isIR = slotMeta.isIR === true || 
         slotMeta.status === "IR" || 
@@ -4962,9 +5003,12 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
       return !isIR;
     });
     
-    const playerStats = activeRosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
-    const totals = aggregateTeam(playerStats);
-    teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
+    // Only calculate stats if we have active roster slots with player meta
+    if (activeRosterSlots.length > 0) {
+      const playerStats = activeRosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
+      const totals = aggregateTeam(playerStats);
+      teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
+    }
   }
 
   if (teamsTotals.length === 0) return res.status(400).json({ error: "No teams with active rosters found" });
@@ -5212,6 +5256,9 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
   const teamsTotals: TeamTotals[] = [];
   for (const t of allTeams) {
     const activeRosterSlots = t.rosterSlots.filter((slot) => {
+      // Must have player meta to calculate stats
+      if (!slot.player?.meta) return false;
+      
       const slotMeta = (slot.meta as any) || {};
       const isIR = slotMeta.isIR === true || 
         slotMeta.status === "IR" || 
@@ -5220,9 +5267,12 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
       return !isIR;
     });
     
-    const playerStats = activeRosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
-    const totals = aggregateTeam(playerStats);
-    teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
+    // Only calculate stats if we have active roster slots with player meta
+    if (activeRosterSlots.length > 0) {
+      const playerStats = activeRosterSlots.map((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).stats);
+      const totals = aggregateTeam(playerStats);
+      teamsTotals.push({ ...totals, teamId: t.id, teamName: t.name });
+    }
   }
 
   if (teamsTotals.length === 0) return res.status(400).json({ error: "No teams with active rosters found" });
