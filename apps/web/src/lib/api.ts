@@ -1,4 +1,9 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "https://i-cant-draft-com-api-navy.vercel.app";
+// Normalize API base URL (remove trailing slashes)
+const getApiBaseUrl = () => {
+  const base = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "https://i-cant-draft-com-api-navy.vercel.app";
+  return base.replace(/\/+$/, ''); // Remove trailing slashes
+};
+const API_BASE_URL = getApiBaseUrl();
 
 export type League = {
   id: string;
