@@ -54,7 +54,7 @@ router.post('/start', async (req: express.Request, res: express.Response) => {
     const snapshotId = (req as any).body?.snapshotId || (req as any).query?.snapshotId;
 
     if (!snapshotId || typeof snapshotId !== 'string') {
-      return res.status(400).json({
+      return (res as any).status(400).json({
         ok: false,
         error: 'Missing or invalid snapshotId parameter',
       });
@@ -66,7 +66,7 @@ router.post('/start', async (req: express.Request, res: express.Response) => {
     });
 
     if (!snapshot) {
-      return res.status(404).json({
+      return (res as any).status(404).json({
         ok: false,
         error: `Demo snapshot '${snapshotId}' not found`,
       });
@@ -87,7 +87,7 @@ router.post('/start', async (req: express.Request, res: express.Response) => {
     });
 
     if (!demoLeague) {
-      return res.status(404).json({
+      return (res as any).status(404).json({
         ok: false,
         error: `No league found for demo snapshot '${snapshotId}'`,
       });
@@ -104,7 +104,7 @@ router.post('/start', async (req: express.Request, res: express.Response) => {
     }
 
     if (!defaultTeam) {
-      return res.status(500).json({
+      return (res as any).status(500).json({
         ok: false,
         error: 'Demo league has no teams',
       });
@@ -116,7 +116,7 @@ router.post('/start', async (req: express.Request, res: express.Response) => {
     // SameSite: Lax for reasonable CSRF protection
     const isProduction = process.env.NODE_ENV === 'production';
     
-    res.cookie('demo_snapshot', snapshotId, {
+    (res as any).cookie('demo_snapshot', snapshotId, {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'lax',
@@ -193,7 +193,7 @@ router.get('/status', async (req: express.Request, res: express.Response) => {
 
     if (!snapshot) {
       // Clear invalid cookie
-      res.clearCookie('demo_snapshot', {
+      (res as any).clearCookie('demo_snapshot', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',

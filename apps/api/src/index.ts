@@ -331,7 +331,7 @@ app.get("/proxy/image", async (req, res) => {
         status: (r as any).status,
         contentType: (r as any).headers.get("content-type"),
       });
-      return res.status(404).json({ error: "Image not found", status: (r as any).status });
+      return (res as any).status(404).json({ error: "Image not found", status: (r as any).status });
     }
 
     const buf = Buffer.from(await (r as any).arrayBuffer());
@@ -3940,9 +3940,10 @@ app.get("/debug/espn", async (_req, res) => {
 
   const contentType = (r as any).headers.get("content-type") ?? "";
   const location = (r as any).headers.get("location") ?? "";
-  const text = await (r as any).text();
+  // @ts-ignore - fetch Response type
+  const text = await r.text();
 
-  return res.status(200).json({
+  return (res as any).status(200).json({
     requestedUrl: url.toString(),
     status: (r as any).status,
     redirected: (r as any).status >= 300 && (r as any).status < 400,
@@ -4649,7 +4650,8 @@ app.get("/debug/team/:leagueId/:teamId/roster-diff", async (req, res) => {
         });
 
         if ((r as any).ok) {
-          const data: any = await (r as any).json();
+          // @ts-ignore - fetch Response type
+    const data: any = await r.json();
           const teamsRaw: any[] = Array.isArray(data?.teams) ? data.teams : [];
           const targetTeam = teamsRaw.find(
             (t: any) => String(t?.id) === team.providerTeamId
@@ -4808,7 +4810,7 @@ app.get("/leagues/:leagueId/teams", async (req: express.Request, res: express.Re
     orderBy: { name: "asc" },
   });
 
-  return res.status(200).json({
+  return (res as any).status(200).json({
     league: { id: league.id, name: league.name },
     teams: teams.map((t: any) => ({ id: t.id, name: t.name, providerTeamId: t.providerTeamId })),
   });
@@ -4820,7 +4822,7 @@ app.get("/leagues", async (_req: express.Request, res: express.Response) => {
     select: { id: true, name: true, seasonYear: true, provider: true, providerLeagueId: true, createdAt: true },
     orderBy: { createdAt: "desc" },
   });
-  return res.json({ leagues });
+  return (res as any).json({ leagues });
 });
 
 // Team profile (9-cat ranks)
