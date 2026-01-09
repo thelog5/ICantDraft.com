@@ -3,7 +3,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import express from "express";
 import cookieParser from "cookie-parser";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import { PrismaClient as PrismaClientImpl } from "@prisma/client";
 import {
   extractPlayerStats,
   aggregateTeam,
@@ -80,7 +81,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClientImpl();
 
 // ---------- AUTH ROUTES ----------
 import authRouter from './routes/auth.js';
@@ -142,7 +143,9 @@ function normalizeEspnUrl(url: string | null): string | null {
 function proxiedImage(req: express.Request, url: string | null) {
   const fixed = normalizeEspnUrl(url);
   if (!fixed) return null;
-  const base = `${req.protocol}://${req.get("host")}`;
+  const protocol = (req as any).protocol || 'http';
+  const host = (req as any).get ? (req as any).get("host") : req.headers.host || 'localhost';
+  const base = `${protocol}://${host}`;
   return `${base}/proxy/image?url=${encodeURIComponent(fixed)}`;
 }
 
@@ -319,10 +322,10 @@ app.get("/proxy/image", async (req, res) => {
   }
 
   try {
-    const r = await fetch(u.toString(), { redirect: "follow", headers });
+    const r: globalThis.Response = await fetch(u.toString(), { redirect: "follow", headers });
 
     if (!r.ok) {
-      // log upstream so you can see if it’s 403 vs 404
+      // log upstream so you can see if it's 403 vs 404
       console.error("proxy/image upstream failed", {
         url: u.toString(),
         status: r.status,
@@ -3922,7 +3925,7 @@ app.get("/debug/espn", async (_req, res) => {
   url.searchParams.append("view", "mNav");
   url.searchParams.set("platformVersion", "ec4491ff98dc3a672229031f460410e0746d6ecc");
 
-  const r = await fetch(url.toString(), {
+  const r: globalThis.Response = await fetch(url.toString(), {
     method: "GET",
     redirect: "manual",
     headers: {
@@ -3966,7 +3969,7 @@ app.get("/debug/espn-player", async (_req, res) => {
   url.searchParams.append("view", "mTeam");
   url.searchParams.set("platformVersion", platformVersion);
 
-  const r = await fetch(url.toString(), {
+  const r: globalThis.Response = await fetch(url.toString(), {
     headers: {
       Accept: "application/json",
       "User-Agent": "Mozilla/5.0",
@@ -4193,7 +4196,7 @@ app.post("/ingest/espn", async (_req, res) => {
   url.searchParams.append("view", "mStatus");
   url.searchParams.set("platformVersion", platformVersion);
 
-  const r = await fetch(url.toString(), {
+  const r: globalThis.Response = await fetch(url.toString(), {
     headers: {
       Accept: "application/json",
       "User-Agent": "Mozilla/5.0",
@@ -4631,7 +4634,7 @@ app.get("/debug/team/:leagueId/:teamId/roster-diff", async (req, res) => {
         url.searchParams.append("view", "mSchedule");
         url.searchParams.set("platformVersion", platformVersion);
 
-        const r = await fetch(url.toString(), {
+        const r: globalThis.Response = await fetch(url.toString(), {
           headers: {
             Accept: "application/json",
             "User-Agent": "Mozilla/5.0",
@@ -4645,7 +4648,7 @@ app.get("/debug/team/:leagueId/:teamId/roster-diff", async (req, res) => {
           const data: any = await r.json();
           const teamsRaw: any[] = Array.isArray(data?.teams) ? data.teams : [];
           const targetTeam = teamsRaw.find(
-            (t) => String(t?.id) === team.providerTeamId
+            (t: any) => String(t?.id) === team.providerTeamId
           );
 
           if (targetTeam) {
@@ -4665,7 +4668,7 @@ app.get("/debug/team/:leagueId/:teamId/roster-diff", async (req, res) => {
             }
           }
         } else {
-          espnFetchError = `ESPN API returned status ${r.status}`;
+          espnFetchError = `ESPN API returned status ${(r as Response).status}`;
         }
       } else {
         espnFetchError = "Missing ESPN credentials in environment";
@@ -4676,8 +4679,8 @@ app.get("/debug/team/:leagueId/:teamId/roster-diff", async (req, res) => {
 
     // Calculate diff
     const wouldBeEnded = activeRosterSlots
-      .filter((slot) => !espnProviderPlayerIds.has(slot.player.providerPlayerId))
-      .map((slot) => ({
+      .filter((slot: any) => !espnProviderPlayerIds.has(slot.player.providerPlayerId))
+      .map((slot: any) => ({
         rosterSlotId: slot.id,
         providerPlayerId: slot.player.providerPlayerId,
         fullName: slot.player.fullName,
@@ -4695,7 +4698,7 @@ app.get("/debug/team/:leagueId/:teamId/roster-diff", async (req, res) => {
       league: { id: league.id, name: league.name },
       team: { id: team.id, name: team.name, providerTeamId: team.providerTeamId },
       espnFetchError,
-      dbActiveRoster: activeRosterSlots.map((slot) => ({
+      dbActiveRoster: activeRosterSlots.map((slot: any) => ({
         rosterSlotId: slot.id,
         providerPlayerId: slot.player.providerPlayerId,
         fullName: slot.player.fullName,
@@ -4719,7 +4722,7 @@ app.get("/debug/team/:leagueId/:teamId/roster-diff", async (req, res) => {
 });
 
 // Debug endpoint for weekly projections
-app.get("/debug/weekly-projections/:leagueId", async (req, res) => {
+app.get("/debug/weekly-projections/:leagueId", async (req: express.Request, res: express.Response) => {
   const leagueId = req.params.leagueId;
 
   try {
@@ -4749,7 +4752,7 @@ app.get("/debug/weekly-projections/:leagueId", async (req, res) => {
 
       let opponentTeamName: string | null = null;
       if (opponentProviderId) {
-        const opponent = allTeams.find((t) => t.providerTeamId === opponentProviderId);
+        const opponent = allTeams.find((t: any) => t.providerTeamId === opponentProviderId);
         opponentTeamName = opponent?.name || null;
       }
 
@@ -4785,7 +4788,7 @@ app.get("/debug/weekly-projections/:leagueId", async (req, res) => {
 });
 
 // Helper: List teams in a league
-app.get("/leagues/:leagueId/teams", async (req, res) => {
+app.get("/leagues/:leagueId/teams", async (req: express.Request, res: express.Response) => {
   const leagueId = req.params.leagueId;
 
   const league = await prisma.league.findUnique({
@@ -4803,12 +4806,12 @@ app.get("/leagues/:leagueId/teams", async (req, res) => {
 
   return res.status(200).json({
     league: { id: league.id, name: league.name },
-    teams: teams.map((t) => ({ id: t.id, name: t.name, providerTeamId: t.providerTeamId })),
+    teams: teams.map((t: any) => ({ id: t.id, name: t.name, providerTeamId: t.providerTeamId })),
   });
 });
 
 // List leagues
-app.get("/leagues", async (_req, res) => {
+app.get("/leagues", async (_req: express.Request, res: express.Response) => {
   const leagues = await prisma.league.findMany({
     select: { id: true, name: true, seasonYear: true, provider: true, providerLeagueId: true, createdAt: true },
     orderBy: { createdAt: "desc" },

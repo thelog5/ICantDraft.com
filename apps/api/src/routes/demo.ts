@@ -17,7 +17,7 @@ function getPrisma(): PrismaClient {
  * GET /demo/snapshots
  * List all available demo snapshots
  */
-router.get('/snapshots', async (req: Request, res: Response) => {
+router.get('/snapshots', async (req: express.Request, res: express.Response) => {
   try {
     const snapshots = await getPrisma().demoSnapshot.findMany({
       select: {
@@ -47,7 +47,7 @@ router.get('/snapshots', async (req: Request, res: Response) => {
  * Body: { snapshotId: string }
  * Query: ?snapshotId=string
  */
-router.post('/start', async (req: Request, res: Response) => {
+router.post('/start', async (req: express.Request, res: express.Response) => {
   try {
     // Accept snapshotId from either body or query
     const snapshotId = req.body.snapshotId || req.query.snapshotId;
@@ -155,7 +155,7 @@ router.post('/start', async (req: Request, res: Response) => {
  * POST /demo/end
  * End the current demo session by clearing the cookie
  */
-router.post('/end', (req: Request, res: Response) => {
+router.post('/end', (req: express.Request, res: express.Response) => {
   res.clearCookie('demo_snapshot', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -173,7 +173,7 @@ router.post('/end', (req: Request, res: Response) => {
  * GET /demo/status
  * Check current demo session status
  */
-router.get('/status', async (req: Request, res: Response) => {
+router.get('/status', async (req: express.Request, res: express.Response) => {
   try {
     const demoSnapshotId = req.cookies.demo_snapshot;
 

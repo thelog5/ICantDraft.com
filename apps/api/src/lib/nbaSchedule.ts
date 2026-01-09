@@ -74,7 +74,7 @@ export async function fetchNBASchedule(
       const url = `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`;
       
       try {
-        const response = await fetch(url);
+        const response: globalThis.Response = await fetch(url);
         if (!response.ok) {
           console.warn(`[NBA Schedule] Failed to fetch schedule for ${dateStr}: ${response.status}`);
           currentDate.setDate(currentDate.getDate() + 1);

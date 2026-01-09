@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 
 // Use singleton pattern - import from main app or create once
@@ -27,15 +27,15 @@ declare global {
 /**
  * Middleware that checks for demo_snapshot cookie and sets demo scope context
  */
-export function demoScopeMiddleware(req: Request, res: Response, next: NextFunction) {
-  const demoSnapshotId = req.cookies.demo_snapshot;
+export function demoScopeMiddleware(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  const demoSnapshotId = (req as any).cookies?.demo_snapshot;
   
-  req.demoScope = {
+  (req as any).demoScope = {
     demoSnapshotId: demoSnapshotId || null,
     isDemo: !!demoSnapshotId,
   };
   
-  next();
+  (next as any)();
 }
 
 /**
