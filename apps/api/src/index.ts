@@ -76,17 +76,35 @@ app.use((req, res, next) => {
   const requestOrigin = req.headers.origin;
   const webOrigin = process.env.WEB_ORIGIN || process.env.CORS_ORIGIN || "http://localhost:5173";
   
-  // Allow the web origin or the request origin (for CORS)
-  const allowedOrigin = requestOrigin && (
-    requestOrigin.includes('vercel.app') || 
-    requestOrigin.includes('localhost') ||
-    requestOrigin === webOrigin
-  ) ? requestOrigin : webOrigin;
+  // In production, allow vercel.app origins or the configured web origin
+  // In demo mode, be more permissive
+  let allowedOrigin: string;
+  
+  if (requestOrigin) {
+    // Allow if it's a vercel.app domain, localhost, or matches configured origin
+    if (
+      requestOrigin.includes('vercel.app') || 
+      requestOrigin.includes('localhost') ||
+      requestOrigin === webOrigin ||
+      process.env.DEMO_MODE === 'true'
+    ) {
+      allowedOrigin = requestOrigin;
+    } else {
+      allowedOrigin = webOrigin;
+    }
+  } else {
+    allowedOrigin = webOrigin;
+  }
   
   (res as any).header("Access-Control-Allow-Origin", allowedOrigin);
   (res as any).header("Access-Control-Allow-Credentials", "true");
   (res as any).header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   (res as any).header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  
+  // Log CORS for debugging
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[CORS] Request from origin: ${requestOrigin}, Allowed: ${allowedOrigin}`);
+  }
   
   if (req.method === "OPTIONS") {
     return (res as any).sendStatus(200);
