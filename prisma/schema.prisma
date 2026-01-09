@@ -50,6 +50,19 @@ model IntegrationAccount {
   @@index([userId, provider])
 }
 
+model DemoSnapshot {
+  id        String   @id // e.g. "demo_v1"
+  label     String
+  createdAt DateTime @default(now())
+  
+  sourceLeagueId String?
+
+  leagues     League[]
+  teams       Team[]
+  players     Player[]
+  rosterSlots RosterSlot[]
+}
+
 model League {
   id        String   @id @default(uuid()) @db.Uuid
   createdAt DateTime @default(now())
@@ -65,7 +78,10 @@ model League {
   commissionerUserId String? @db.Uuid
   settings           Json?   @db.JsonB
 
-  commissionerUser User? @relation("LeagueCommissioner", fields: [commissionerUserId], references: [id], onDelete: SetNull)
+  demoSnapshotId String?
+
+  commissionerUser User?          @relation("LeagueCommissioner", fields: [commissionerUserId], references: [id], onDelete: SetNull)
+  demoSnapshot     DemoSnapshot?  @relation(fields: [demoSnapshotId], references: [id], onDelete: Cascade)
 
   teams       Team[]
   players     Player[]     @relation("LeaguePlayers")
@@ -73,6 +89,7 @@ model League {
 
   @@unique([provider, providerLeagueId, seasonYear])
   @@index([commissionerUserId])
+  @@index([demoSnapshotId])
 }
 
 model Team {
@@ -88,11 +105,15 @@ model Team {
   managerName String?
   meta        Json?   @db.JsonB
 
-  league      League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  rosterSlots RosterSlot[]
+  demoSnapshotId String?
+
+  league       League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  demoSnapshot DemoSnapshot? @relation(fields: [demoSnapshotId], references: [id], onDelete: Cascade)
+  rosterSlots  RosterSlot[]
 
   @@unique([leagueId, provider, providerTeamId])
   @@index([leagueId])
+  @@index([demoSnapshotId])
 }
 
 model Player {
@@ -112,11 +133,15 @@ model Player {
 
   meta Json? @db.JsonB
 
-  leagues     League[]     @relation("LeaguePlayers")
-  rosterSlots RosterSlot[]
+  demoSnapshotId String?
+
+  leagues      League[]      @relation("LeaguePlayers")
+  rosterSlots  RosterSlot[]
+  demoSnapshot DemoSnapshot? @relation(fields: [demoSnapshotId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerPlayerId])
   @@index([fullName])
+  @@index([demoSnapshotId])
 }
 
 model RosterSlot {
@@ -136,12 +161,16 @@ model RosterSlot {
   slotLabel String?
   meta      Json?   @db.JsonB
 
-  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  demoSnapshotId String?
+
+  league       League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  team         Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player       Player        @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  demoSnapshot DemoSnapshot? @relation(fields: [demoSnapshotId], references: [id], onDelete: Cascade)
 
   @@index([leagueId, teamId, startAt])
   @@index([playerId, startAt])
+  @@index([demoSnapshotId])
 }
 
 model Session {
