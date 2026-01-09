@@ -161,6 +161,11 @@ export async function getRosterSlotsScoped(
     select: { demoSnapshotId: true },
   });
   
+  if (!league) {
+    console.error(`[getRosterSlotsScoped] League not found: ${leagueId}`);
+    return [];
+  }
+  
   const isDemoLeague = !!league?.demoSnapshotId;
   
   const where: any = {
@@ -183,7 +188,7 @@ export async function getRosterSlotsScoped(
     where.demoSnapshotId = null;
   }
   
-  return getPrisma().rosterSlot.findMany({
+  const rosterSlots = await getPrisma().rosterSlot.findMany({
     where,
     include: {
       player: true,
@@ -193,6 +198,17 @@ export async function getRosterSlotsScoped(
       startAt: 'desc',
     },
   });
+  
+  // Debug logging
+  console.log(`[getRosterSlotsScoped] leagueId: ${leagueId}, teamId: ${teamId}, demoSnapshotId: ${demoSnapshotId}`);
+  console.log(`[getRosterSlotsScoped] Found ${rosterSlots.length} roster slots`);
+  if (rosterSlots.length > 0) {
+    const withPlayers = rosterSlots.filter(rs => rs.player).length;
+    const withPlayerMeta = rosterSlots.filter(rs => rs.player?.meta).length;
+    console.log(`[getRosterSlotsScoped] Slots with players: ${withPlayers}, with player.meta: ${withPlayerMeta}`);
+  }
+  
+  return rosterSlots;
 }
 
 /**
@@ -214,12 +230,16 @@ export async function getTeamsScoped(
     where.demoSnapshotId = null;
   }
   
-  return getPrisma().team.findMany({
+  const teams = await getPrisma().team.findMany({
     where,
     orderBy: {
       name: 'asc',
     },
   });
+  
+  console.log(`[getTeamsScoped] leagueId: ${leagueId}, demoSnapshotId: ${demoSnapshotId}, found ${teams.length} teams`);
+  
+  return teams;
 }
 
 /**

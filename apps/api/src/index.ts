@@ -5009,6 +5009,11 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
   const teamsTotals: TeamTotals[] = [];
 
   for (const t of allTeams) {
+    // Debug: log team roster slot info
+    const totalSlots = t.rosterSlots.length;
+    const slotsWithPlayer = t.rosterSlots.filter(s => s.player).length;
+    const slotsWithPlayerMeta = t.rosterSlots.filter(s => s.player?.meta).length;
+    
     // Filter out IR players from team totals AND slots without player meta
     const activeRosterSlots = t.rosterSlots.filter((slot) => {
       // Must have player and player meta to calculate stats
@@ -5021,6 +5026,8 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
         slotMeta.status === "OUT";
       return !isIR;
     });
+    
+    console.log(`[Team Profile] Team ${t.name} (${t.id}): ${totalSlots} total slots, ${slotsWithPlayer} with player, ${slotsWithPlayerMeta} with player.meta, ${activeRosterSlots.length} active (non-IR)`);
     
     // Only calculate stats if we have active roster slots with player meta
     if (activeRosterSlots.length > 0) {
@@ -5036,10 +5043,22 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
   }
 
   if (teamsTotals.length === 0) {
-    console.error(`No teams with active rosters found for league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
-    console.error(`Total teams fetched: ${allTeams.length}`);
-    console.error(`Teams with roster slots: ${allTeams.filter(t => t.rosterSlots.length > 0).length}`);
-    return res.status(400).json({ error: "No teams with active rosters found. Please ensure roster data has been ingested and players are not all on IR." });
+    console.error(`[Team Profile] No teams with active rosters found for league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
+    console.error(`[Team Profile] Total teams fetched: ${allTeams.length}`);
+    console.error(`[Team Profile] Teams with roster slots: ${allTeams.filter(t => t.rosterSlots.length > 0).length}`);
+    const teamsWithPlayerMeta = allTeams.filter(t => t.rosterSlots.some(s => s.player?.meta)).length;
+    console.error(`[Team Profile] Teams with player.meta: ${teamsWithPlayerMeta}`);
+    
+    // Provide actionable error message
+    if (allTeams.length === 0) {
+      return res.status(400).json({ error: "No teams found in league. Please ensure the league exists and you have access to it." });
+    } else if (allTeams.every(t => t.rosterSlots.length === 0)) {
+      return res.status(400).json({ error: "No roster slots found for any teams. Please run the ESPN data ingestion to populate roster data." });
+    } else if (allTeams.every(t => !t.rosterSlots.some(s => s.player?.meta))) {
+      return res.status(400).json({ error: "Roster slots found but player stats are missing. Please ensure player data has been ingested with stats." });
+    } else {
+      return res.status(400).json({ error: "No teams with active (non-IR) rosters found. All players may be on IR, or roster data needs to be refreshed." });
+    }
   }
 
   const dist = computeLeagueDistributions(teamsTotals);
@@ -5288,6 +5307,9 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
   // Compute team totals for all teams (for league distribution)
   const teamsTotals: TeamTotals[] = [];
   for (const t of allTeams) {
+    const totalSlots = t.rosterSlots.length;
+    const slotsWithPlayerMeta = t.rosterSlots.filter(s => s.player?.meta).length;
+    
     const activeRosterSlots = t.rosterSlots.filter((slot) => {
       // Must have player and player meta to calculate stats
       if (!slot.player || !slot.player.meta) return false;
@@ -5299,6 +5321,8 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
         slotMeta.status === "OUT";
       return !isIR;
     });
+    
+    console.log(`[Trade Suggestions] Team ${t.name}: ${totalSlots} slots, ${slotsWithPlayerMeta} with meta, ${activeRosterSlots.length} active`);
     
     // Only calculate stats if we have active roster slots with player meta
     if (activeRosterSlots.length > 0) {
@@ -5314,10 +5338,22 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
   }
 
   if (teamsTotals.length === 0) {
-    console.error(`No teams with active rosters found for league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
-    console.error(`Total teams fetched: ${allTeams.length}`);
-    console.error(`Teams with roster slots: ${allTeams.filter(t => t.rosterSlots.length > 0).length}`);
-    return res.status(400).json({ error: "No teams with active rosters found. Please ensure roster data has been ingested and players are not all on IR." });
+    console.error(`[Trade Suggestions] No teams with active rosters found for league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
+    console.error(`[Trade Suggestions] Total teams fetched: ${allTeams.length}`);
+    console.error(`[Trade Suggestions] Teams with roster slots: ${allTeams.filter(t => t.rosterSlots.length > 0).length}`);
+    const teamsWithPlayerMeta = allTeams.filter(t => t.rosterSlots.some(s => s.player?.meta)).length;
+    console.error(`[Trade Suggestions] Teams with player.meta: ${teamsWithPlayerMeta}`);
+    
+    // Provide actionable error message
+    if (allTeams.length === 0) {
+      return res.status(400).json({ error: "No teams found in league. Please ensure the league exists and you have access to it." });
+    } else if (allTeams.every(t => t.rosterSlots.length === 0)) {
+      return res.status(400).json({ error: "No roster slots found for any teams. Please run the ESPN data ingestion to populate roster data." });
+    } else if (allTeams.every(t => !t.rosterSlots.some(s => s.player?.meta))) {
+      return res.status(400).json({ error: "Roster slots found but player stats are missing. Please ensure player data has been ingested with stats." });
+    } else {
+      return res.status(400).json({ error: "No teams with active (non-IR) rosters found. All players may be on IR, or roster data needs to be refreshed." });
+    }
   }
 
   const leagueDist = computeLeagueDistributions(teamsTotals);
