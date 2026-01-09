@@ -65,7 +65,7 @@ console.log("ENV LOADED", {
 });
 
 // ---------- APP ----------
-export const app = express();
+const app = express();
 console.log("SERVER BUILD ID:", Date.now());
 
 app.use(express.json());
