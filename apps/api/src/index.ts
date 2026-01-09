@@ -4871,35 +4871,47 @@ app.get("/leagues", async (_req: express.Request, res: express.Response) => {
 
 // Team profile (9-cat ranks)
 app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
-  const leagueId = req.params.leagueId;
-  const teamId = req.params.teamId;
+  const leagueId = (req as any).params.leagueId;
+  const teamId = (req as any).params.teamId;
 
-  const league = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: { id: true, seasonYear: true },
-  });
-  if (!league) return (res as any).status(404).json({ error: "League not found" });
+  try {
+    // Use demo scope
+    const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
 
-  const team = await prisma.team.findFirst({
-    where: { id: teamId, leagueId },
-    select: { id: true, name: true },
-  });
-  if (!team) return res.status(404).json({ error: "Team not found or not in league" });
+    const league = await getLeagueScoped(leagueId, demoSnapshotId);
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
-  const allTeams = await prisma.team.findMany({
-    where: { leagueId },
-    select: {
-      id: true,
-      name: true,
-      rosterSlots: {
-        where: { endAt: null },
-        select: {
-          meta: true,
-          player: { select: { id: true, meta: true } },
-        },
-      },
-    },
-  });
+    const team = await getTeamScoped(teamId, demoSnapshotId);
+    if (!team || team.leagueId !== leagueId) {
+      return (res as any).status(404).json({ error: "Team not found or not in league" });
+    }
+
+    // Get all teams with demo scope
+    const allTeamsData = await getTeamsScoped(leagueId, demoSnapshotId);
+    
+    // Fetch roster slots for each team with player data
+    const allTeams = await Promise.all(allTeamsData.map(async (t: any) => {
+      const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
+      const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
+      
+      // Get player data for each slot
+      const slotsWithPlayers = await Promise.all(currentSlots.map(async (slot: any) => {
+        const player = await prisma.player.findUnique({
+          where: { id: slot.playerId },
+          select: { id: true, meta: true },
+        });
+        return {
+          meta: slot.meta,
+          player: { id: slot.playerId, meta: player?.meta || null },
+        };
+      }));
+      
+      return {
+        id: t.id,
+        name: t.name,
+        rosterSlots: slotsWithPlayers,
+      };
+    }));
 
   const teamsTotals: TeamTotals[] = [];
 
@@ -4977,7 +4989,11 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
     })
     .sort((a, b) => b.teamScore - a.teamScore);
 
-  return res.status(200).json({ profile, leagueAverage, leagueRanksSummary });
+    return (res as any).status(200).json({ profile, leagueAverage, leagueRanksSummary });
+  } catch (error: any) {
+    console.error("Error fetching team profile:", error);
+    return (res as any).status(500).json({ error: "Failed to fetch team profile" });
+  }
 });
 
 // Power rankings
