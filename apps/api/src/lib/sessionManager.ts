@@ -1,3 +1,4 @@
+// @ts-ignore - PrismaClient is generated at build time
 import { PrismaClient } from '@prisma/client';
 import { encrypt, decrypt, encodeCredentials, decodeCredentials } from './encryption.js';
 

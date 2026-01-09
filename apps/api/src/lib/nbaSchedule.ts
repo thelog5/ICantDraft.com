@@ -74,14 +74,15 @@ export async function fetchNBASchedule(
       const url = `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`;
       
       try {
-        const response: globalThis.Response = await fetch(url);
-        if (!response.ok) {
-          console.warn(`[NBA Schedule] Failed to fetch schedule for ${dateStr}: ${response.status}`);
+        // @ts-ignore - fetch returns globalThis.Response
+        const response = await fetch(url);
+        if (!(response as any).ok) {
+          console.warn(`[NBA Schedule] Failed to fetch schedule for ${dateStr}: ${(response as any).status}`);
           currentDate.setDate(currentDate.getDate() + 1);
           continue;
         }
         
-        const data: any = await response.json();
+        const data: any = await (response as any).json();
         const events = data?.events || [];
         
         if (events.length > 0) {

@@ -1,4 +1,5 @@
 import express from 'express';
+// @ts-ignore - PrismaClient is generated at build time
 import { PrismaClient } from '@prisma/client';
 import {
   createSession,
@@ -82,15 +83,15 @@ router.post('/espn/connect', async (req, res) => {
       },
     });
 
-    if (!response.ok) {
-      console.log(`[Auth] ESPN API returned ${response.status} for league ${leagueId}`);
+    if (!(response as any).ok) {
+      console.log(`[Auth] ESPN API returned ${(response as any).status} for league ${leagueId}`);
       return res.status(401).json({
         success: false,
         message: 'Invalid ESPN credentials or league not found.',
       });
     }
 
-    const data = await response.json() as any;
+    const data = await (response as any).json() as any;
     
     const leagueName = data.settings?.name || 'Unknown League';
     const teams = (data.teams || []).map((t: any) => ({

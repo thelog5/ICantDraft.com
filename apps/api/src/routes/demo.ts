@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+// @ts-ignore - PrismaClient is generated at build time
 import { PrismaClient } from '@prisma/client';
 
 const router = express.Router();
@@ -50,7 +51,7 @@ router.get('/snapshots', async (req: express.Request, res: express.Response) => 
 router.post('/start', async (req: express.Request, res: express.Response) => {
   try {
     // Accept snapshotId from either body or query
-    const snapshotId = req.body.snapshotId || req.query.snapshotId;
+    const snapshotId = (req as any).body?.snapshotId || (req as any).query?.snapshotId;
 
     if (!snapshotId || typeof snapshotId !== 'string') {
       return res.status(400).json({

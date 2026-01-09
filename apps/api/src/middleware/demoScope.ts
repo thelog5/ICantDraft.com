@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+// @ts-ignore - PrismaClient is generated at build time
 import { PrismaClient } from '@prisma/client';
 
 // Use singleton pattern - import from main app or create once
