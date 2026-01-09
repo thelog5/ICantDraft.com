@@ -3480,8 +3480,9 @@ app.get("/leagues/:leagueId/streaming/recommendations", async (req, res) => {
       }
 
       // Generate headshot URL using ESPN CDN
-      const headshotUrl = player.providerPlayerId
-        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${player.providerPlayerId}.png`)
+      const cleanPlayerId = cleanProviderPlayerId(player.providerPlayerId);
+      const headshotUrl = cleanPlayerId
+        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`)
         : null;
 
       scoredPlayers.push({
