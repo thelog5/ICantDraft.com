@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import express from "express";
+import cookieParser from "cookie-parser";
 import { PrismaClient } from "@prisma/client";
 import {
   extractPlayerStats,
@@ -67,16 +68,31 @@ const app = express();
 console.log("SERVER BUILD ID:", Date.now());
 
 app.use(express.json());
+app.use(cookieParser());
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "http://localhost:5173");
   res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
 const prisma = new PrismaClient();
+
+// ---------- AUTH ROUTES ----------
+import authRouter from './routes/auth.js';
+import { cleanupExpiredSessions } from './lib/sessionManager.js';
+
+app.use('/auth', authRouter);
+
+// Cleanup expired sessions every hour
+setInterval(() => {
+  cleanupExpiredSessions().catch(err => {
+    console.error('[SessionCleanup] Error:', err);
+  });
+}, 60 * 60 * 1000);
 
 // ---------- HELPERS (AVATARS / IMAGE PROXY) ----------
 function normalizeEspnUrl(url: string | null): string | null {

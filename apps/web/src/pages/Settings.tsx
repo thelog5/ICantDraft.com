@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import TopNav from "../components/TopNav";
 import { api, ApiError } from "../lib/api";
-import { getActiveContext, setActiveContext, ActiveContext } from "../lib/activeContext";
+import { getActiveContext, setActiveContext, clearActiveContext, ActiveContext } from "../lib/activeContext";
 import Card from "../components/Card";
 import "./Settings.css";
 
@@ -69,6 +69,11 @@ export default function Settings() {
     }
   };
 
+  const handleClearContext = () => {
+    clearActiveContext();
+    navigate('/setup');
+  };
+
   return (
     <TopNav>
       <div className="settings-page">
@@ -127,6 +132,14 @@ export default function Settings() {
               disabled={loading || !leagueKeyInput.trim() || !teamKeyInput.trim()}
             >
               {loading ? "Saving..." : "Save Settings"}
+            </button>
+
+            <button
+              className="settings-logout-button"
+              onClick={handleClearContext}
+              style={{ marginTop: '1rem' }}
+            >
+              Clear Settings & Return to Setup
             </button>
           </div>
         </Card>

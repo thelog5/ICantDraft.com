@@ -413,16 +413,16 @@ export default function WeeklyProjections() {
               try {
                 setLoading(true);
                 await api.refreshEspnData();
-                alert('ESPN data refreshed! Reloading...');
                 await loadData();
               } catch (err) {
-                alert('Error refreshing ESPN data: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                console.error('Error refreshing ESPN data:', err);
+                setError(err instanceof Error ? err.message : 'Failed to refresh ESPN data');
               } finally {
                 setLoading(false);
               }
             }}
           >
-            🔄 Refresh ESPN Data
+            Refresh ESPN Data
           </button>
         </div>
 

@@ -128,3 +128,48 @@
   cursor: not-allowed;
 }
 
+/* Session Info */
+.session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.session-info-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.session-label {
+  font-weight: 600;
+  color: #6b7280;
+  min-width: 80px;
+}
+
+.session-value {
+  color: #111;
+  font-weight: 500;
+}
+
+.settings-logout-button {
+  width: 100%;
+  padding: 0.875rem;
+  background-color: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.settings-logout-button:hover {
+  background-color: #b91c1c;
+}
+

@@ -4,7 +4,15 @@
 }
 
 .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 2rem;
+  gap: 2rem;
+}
+
+.page-header-text {
+  flex: 1;
 }
 
 .page-title {
@@ -19,6 +27,32 @@
   font-size: 1rem;
   color: #666;
   font-weight: 500;
+}
+
+.refresh-espn-button {
+  padding: 0.625rem 1.25rem;
+  background: #dc2626;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.refresh-espn-button:hover:not(:disabled) {
+  background: #b91c1c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.refresh-espn-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Roster Table */

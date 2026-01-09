@@ -143,3 +143,18 @@ model RosterSlot {
   @@index([leagueId, teamId, startAt])
   @@index([playerId, startAt])
 }
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  mode              String  // "espn" or "demo"
+  leagueId          String?
+  seasonId          Int?
+  teamId            String? // internal team id
+  providerTeamId    String? // ESPN team id
+  encryptedCredentials String? // AES-encrypted ESPN_S2:SWID for espn mode
+
+  @@index([expiresAt])
+}

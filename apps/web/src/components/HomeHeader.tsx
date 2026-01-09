@@ -6,6 +6,8 @@ import "./HomeHeader.css";
 type HomeHeaderProps = {
   leagueId: string;
   myTeamId: string;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 };
 
 type StandingsData = {
@@ -30,7 +32,7 @@ type MatchupData = {
   updatedAt?: string;
 };
 
-export default function HomeHeader({ leagueId, myTeamId }: HomeHeaderProps) {
+export default function HomeHeader({ leagueId, myTeamId, onRefresh, refreshing }: HomeHeaderProps) {
   const [loading, setLoading] = useState(true);
   const [standings, setStandings] = useState<StandingsData | null>(null);
   const [matchup, setMatchup] = useState<MatchupData | null>(null);
@@ -137,6 +139,15 @@ export default function HomeHeader({ leagueId, myTeamId }: HomeHeaderProps) {
               </div>
             </div>
           </div>
+          {onRefresh && (
+            <button 
+              className="home-header-refresh-btn" 
+              onClick={onRefresh}
+              disabled={refreshing}
+            >
+              {refreshing ? "Refreshing..." : "Refresh ESPN Data"}
+            </button>
+          )}
         </div>
       </div>
 
