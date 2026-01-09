@@ -5984,7 +5984,8 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
     }
   }
 
-  const myTeamAvatarUrl = await getTeamAvatarUrl(req, myTeam.id);
+  // Use demo scope (already set earlier in function)
+  const myTeamAvatarUrl = await getTeamAvatarUrl(req, myTeam.id, demoSnapshotId);
 
   const response: any = {
     ok,
