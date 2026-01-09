@@ -4795,7 +4795,7 @@ app.get("/debug/weekly-projections/:leagueId", async (req: express.Request, res:
     });
   } catch (err) {
     console.error("Error in debug endpoint:", err);
-    return res.status(500).json({ error: "Failed to fetch debug info" });
+    return (res as any).status(500).json({ error: "Failed to fetch debug info" });
   }
 });
 
