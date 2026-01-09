@@ -218,13 +218,30 @@ export async function getTeamsScoped(
   leagueId: string,
   demoSnapshotId: string | null
 ): Promise<any[]> {
+  // First, check if the league is a demo league (similar to getRosterSlotsScoped)
+  const league = await getPrisma().league.findUnique({
+    where: { id: leagueId },
+    select: { demoSnapshotId: true },
+  });
+  
+  if (!league) {
+    console.error(`[getTeamsScoped] League not found: ${leagueId}`);
+    return [];
+  }
+  
+  const isDemoLeague = !!league?.demoSnapshotId;
+  
   const where: any = {
     leagueId,
   };
   
-  // If in demo mode, restrict to demo snapshot
+  // If we have a demoSnapshotId, use it for filtering
   if (demoSnapshotId) {
+    // In demo mode, restrict to demo snapshot
     where.demoSnapshotId = demoSnapshotId;
+  } else if (isDemoLeague) {
+    // League is a demo league but no cookie yet - allow demo teams
+    where.demoSnapshotId = league.demoSnapshotId;
   } else {
     // In live mode, only allow non-demo teams
     where.demoSnapshotId = null;
@@ -237,7 +254,7 @@ export async function getTeamsScoped(
     },
   });
   
-  console.log(`[getTeamsScoped] leagueId: ${leagueId}, demoSnapshotId: ${demoSnapshotId}, found ${teams.length} teams`);
+  console.log(`[getTeamsScoped] leagueId: ${leagueId}, demoSnapshotId: ${demoSnapshotId}, isDemoLeague: ${isDemoLeague}, league.demoSnapshotId: ${league.demoSnapshotId}, found ${teams.length} teams`);
   
   return teams;
 }
