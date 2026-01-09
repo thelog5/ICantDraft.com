@@ -4220,6 +4220,7 @@ app.post("/ingest/espn", async (_req, res) => {
     return (res as any).status(502).json({ error: "ESPN fetch failed", status: (r as any).status, snippet: text.slice(0, 300) });
   }
 
+  // @ts-ignore - fetch Response type
   const data: any = await r.json();
 
   const provider = "ESPN" as const;
