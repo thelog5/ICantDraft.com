@@ -4807,7 +4807,7 @@ app.get("/leagues/:leagueId/teams", async (req: express.Request, res: express.Re
     select: { id: true, name: true },
   });
 
-  if (!league) return res.status(404).json({ error: "League not found" });
+  if (!league) return (res as any).status(404).json({ error: "League not found" });
 
   const teams = await prisma.team.findMany({
     where: { leagueId },
@@ -4839,7 +4839,7 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
     where: { id: leagueId },
     select: { id: true, seasonYear: true },
   });
-  if (!league) return res.status(404).json({ error: "League not found" });
+  if (!league) return (res as any).status(404).json({ error: "League not found" });
 
   const team = await prisma.team.findFirst({
     where: { id: teamId, leagueId },
@@ -4949,7 +4949,7 @@ app.get("/leagues/:leagueId/power-rankings", async (req, res) => {
     where: { id: leagueId },
     select: { id: true, name: true, seasonYear: true },
   });
-  if (!league) return res.status(404).json({ error: "League not found" });
+  if (!league) return (res as any).status(404).json({ error: "League not found" });
 
   const teams = await prisma.team.findMany({
     where: { leagueId },
@@ -5002,7 +5002,7 @@ app.get("/leagues/:leagueId/overview", async (req, res) => {
     where: { id: leagueId },
     select: { id: true, name: true, seasonYear: true },
   });
-  if (!league) return res.status(404).json({ error: "League not found" });
+  if (!league) return (res as any).status(404).json({ error: "League not found" });
 
   const teams = await prisma.team.findMany({
     where: { leagueId },
@@ -5062,7 +5062,7 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
     where: { id: leagueId },
     select: { id: true, name: true, seasonYear: true },
   });
-  if (!league) return res.status(404).json({ error: "League not found" });
+  if (!league) return (res as any).status(404).json({ error: "League not found" });
 
   // Get scoring period info (for weekly projections)
   const myTeamMeta = await prisma.team.findFirst({
