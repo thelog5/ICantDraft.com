@@ -202,18 +202,24 @@ export default function MyTeamAnalysis() {
     }
   };
 
+  const [refreshing, setRefreshing] = useState(false);
+
   const handleRefresh = async () => {
     try {
+      setRefreshing(true);
       await api.refreshEspnData();
       await loadData();
     } catch (err) {
       console.error("Refresh failed:", err);
+      setError("Failed to refresh ESPN data");
+    } finally {
+      setRefreshing(false);
     }
   };
 
   if (contextLoading || loading || !ctx) {
     return (
-      <TopNav onRefresh={handleRefresh}>
+      <TopNav>
         <div className="my-team-analysis">
           <Skeleton height="200px" width="100%" />
           <Skeleton height="400px" width="100%" style={{ marginTop: "2rem" }} />
@@ -224,7 +230,7 @@ export default function MyTeamAnalysis() {
 
   if (error) {
     return (
-      <TopNav onRefresh={handleRefresh}>
+      <TopNav>
         <div className="my-team-analysis">
           <ErrorState message={error} onRetry={loadData} />
         </div>
@@ -234,7 +240,7 @@ export default function MyTeamAnalysis() {
 
   if (!profile) {
     return (
-      <TopNav onRefresh={handleRefresh}>
+      <TopNav>
         <div className="my-team-analysis">
           <ErrorState message="Team profile not found" />
         </div>
@@ -245,7 +251,7 @@ export default function MyTeamAnalysis() {
   // Safety check for profile structure
   if (!profile.profile || !profile.profile.zScores || !profile.profile.categoryRank) {
     return (
-      <TopNav onRefresh={handleRefresh}>
+      <TopNav>
         <div className="my-team-analysis">
           <ErrorState message="Invalid team profile data structure" />
         </div>
@@ -335,11 +341,20 @@ export default function MyTeamAnalysis() {
   };
 
   return (
-    <TopNav onRefresh={handleRefresh}>
+    <TopNav>
       <div className="my-team-analysis">
         <div className="page-header">
-          <h1 className="page-title">Team Analysis: {ctx?.teamName || "My Team"}</h1>
-          <p className="page-subtitle">{ctx?.leagueName || ""}</p>
+          <div className="page-header-text">
+            <h1 className="page-title">Team Analysis: {ctx?.teamName || "My Team"}</h1>
+            <p className="page-subtitle">{ctx?.leagueName || ""}</p>
+          </div>
+          <button 
+            className="refresh-espn-button" 
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+          >
+            {refreshing ? "Refreshing..." : "Refresh ESPN Data"}
+          </button>
         </div>
 
         {/* A) Full Roster Table */}

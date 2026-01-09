@@ -409,18 +409,24 @@ export default function Dashboard() {
     }
   };
 
+  const [refreshing, setRefreshing] = useState(false);
+
   const handleRefresh = async () => {
     try {
+      setRefreshing(true);
       await api.refreshEspnData();
       await loadData();
     } catch (err) {
       console.error("Refresh failed:", err);
+      setApiError("Failed to refresh ESPN data");
+    } finally {
+      setRefreshing(false);
     }
   };
 
   if (contextLoading || loading || !ctx) {
     return (
-      <TopNav onRefresh={handleRefresh}>
+      <TopNav>
         <div className="dashboard">
           <Skeleton height="200px" width="100%" />
           <Skeleton height="400px" width="100%" style={{ marginTop: "2rem" }} />
@@ -431,7 +437,7 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <TopNav onRefresh={handleRefresh}>
+      <TopNav>
         <div className="dashboard">
           <ErrorState message={error} onRetry={loadData} />
         </div>
@@ -441,7 +447,7 @@ export default function Dashboard() {
 
   if (!profile) {
     return (
-      <TopNav onRefresh={handleRefresh}>
+      <TopNav>
         <div className="dashboard">
           <ErrorState message="No team profile found" onRetry={loadData} />
         </div>
@@ -452,7 +458,7 @@ export default function Dashboard() {
   // Safety check for profile structure
   if (!profile.profile || !profile.profile.zScores || !profile.profile.categoryRank) {
     return (
-      <TopNav onRefresh={handleRefresh}>
+      <TopNav>
         <div className="dashboard">
           <ErrorState message="Invalid team profile data" onRetry={loadData} />
         </div>
@@ -534,14 +540,19 @@ export default function Dashboard() {
 
 
   return (
-    <TopNav onRefresh={handleRefresh}>
+    <TopNav>
       {apiError && (
         <div className="api-error-banner">
           ⚠️ {apiError}
         </div>
       )}
       <div className="dashboard">
-        <HomeHeader leagueId={ctx.leagueId} myTeamId={ctx.teamId} />
+        <HomeHeader 
+          leagueId={ctx.leagueId} 
+          myTeamId={ctx.teamId}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+        />
         <div className="dashboard-grid">
           {/* Category Overview - Left */}
           <Card className="dashboard-card category-overview-card">

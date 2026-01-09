@@ -1,4 +1,6 @@
 import { Routes, Route } from "react-router-dom";
+import Landing from "./pages/Landing";
+import Setup from "./pages/Setup";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import WeeklyProjections from "./pages/WeeklyProjections";
@@ -10,7 +12,12 @@ import Settings from "./pages/Settings";
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      {/* Public routes */}
+      <Route path="/" element={<Landing />} />
+      <Route path="/setup" element={<Setup />} />
+      
+      {/* App routes (activeContext based) */}
+      <Route path="/home" element={<Home />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/weekly-projections" element={<WeeklyProjections />} />
       <Route path="/trade-suggestions" element={<TradeSuggestions />} />
