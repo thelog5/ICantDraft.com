@@ -8,7 +8,12 @@ import './Setup.css';
 const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 const DEMO_LEAGUE_ID = import.meta.env.VITE_DEMO_LEAGUE_ID;
 const DEMO_TEAM_ID = import.meta.env.VITE_DEMO_TEAM_ID;
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://i-cant-draft-com-api-navy.vercel.app';
+// Normalize API base URL (remove trailing slash)
+const getApiBase = () => {
+  const base = import.meta.env.VITE_API_BASE_URL || 'https://i-cant-draft-com-api-navy.vercel.app';
+  return base.replace(/\/+$/, ''); // Remove trailing slashes
+};
+const API_BASE = getApiBase();
 
 export default function Setup() {
   const navigate = useNavigate();

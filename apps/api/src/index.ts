@@ -98,6 +98,16 @@ app.use((req, res, next) => {
     }
   }
   
+  // Handle OPTIONS preflight requests FIRST, before any redirects
+  if (req.method === "OPTIONS") {
+    (res as any).header("Access-Control-Allow-Origin", allowedOrigin);
+    (res as any).header("Access-Control-Allow-Credentials", "true");
+    (res as any).header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    (res as any).header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    (res as any).header("Access-Control-Max-Age", "86400"); // 24 hours
+    return (res as any).sendStatus(200);
+  }
+  
   (res as any).header("Access-Control-Allow-Origin", allowedOrigin);
   (res as any).header("Access-Control-Allow-Credentials", "true");
   (res as any).header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
@@ -106,9 +116,6 @@ app.use((req, res, next) => {
   // Log CORS for debugging
   console.log(`[CORS] Request from origin: ${requestOrigin || 'none'}, Allowed: ${allowedOrigin}`);
   
-  if (req.method === "OPTIONS") {
-    return (res as any).sendStatus(200);
-  }
   next();
 });
 
