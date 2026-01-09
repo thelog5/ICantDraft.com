@@ -5940,13 +5940,26 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
 });
 
 
+// Root route
+app.get("/", (_req, res) => {
+  (res as any).json({ 
+    ok: true, 
+    message: "ICantDraft API",
+    version: "1.0.0",
+    endpoints: ["/health", "/leagues", "/auth", "/demo"]
+  });
+});
+
 // ---------- START (Local Dev Only) ----------
 // For Vercel, use api/index.ts with serverless-http
 // Export app for serverless function
 export default app;
 
 // Start server for local development only
-const port = Number(process.env.PORT ?? 3000);
-app.listen(port, () => {
-  console.log(`api listening on :${port}`);
-});
+// Don't run in Vercel serverless environment
+if (process.env.VERCEL !== "1" && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  const port = Number(process.env.PORT ?? 3000);
+  app.listen(port, () => {
+    console.log(`api listening on :${port}`);
+  });
+}
