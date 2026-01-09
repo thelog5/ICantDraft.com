@@ -3669,11 +3669,11 @@ app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) =
       return (res as any).status(404).json({ error: "Team not found or not in league" });
     }
 
-    const rosterSlots = await getRosterSlotsScoped(leagueId, teamId, demoSnapshotId);
-    const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
+    const rosterSlotsData = await getRosterSlotsScoped(leagueId, teamId, demoSnapshotId);
+    const currentSlots = rosterSlotsData.filter((slot: any) => !slot.endAt);
     
     // Map to expected format
-    const formattedSlots = currentSlots.map((slot: any) => ({
+    const rosterSlots = currentSlots.map((slot: any) => ({
       meta: slot.meta,
       slotLabel: slot.slotLabel,
       player: {
@@ -3692,9 +3692,6 @@ app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) =
     const defaultGamesPerWeek = 4;
     const scoringPeriodStartDate = teamMeta.scoringPeriodStartDate || null;
     const scoringPeriodEndDate = teamMeta.scoringPeriodEndDate || null;
-    
-    // Use formatted slots
-    const rosterSlots = formattedSlots;
 
     // Extract per-game stats and calculate projected games for all players
     const playerProjections = rosterSlots.map((slot) => {
