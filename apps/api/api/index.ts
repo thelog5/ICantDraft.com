@@ -1,7 +1,6 @@
-// Vercel serverless function - auto-detected by Vercel
-// Files in the api/ folder become serverless functions
-// Import the Express app from the built dist file (build runs first)
-import app from '../dist/index.js';
+// Vercel serverless function entry point
+// This file at apps/api/api/index.ts is auto-detected by Vercel when Root Directory is apps/api
+import serverless from "serverless-http";
+import { app } from "../src/index.js";
 
-export default app;
-
+export default serverless(app);
