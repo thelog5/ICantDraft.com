@@ -6,19 +6,7 @@ import serverless from "serverless-http";
 import app from "../src/index.js";
 
 // Wrap Express app with serverless-http
-const handler = serverless(app, {
-  binary: ['image/*', 'application/json'],
-});
+// serverless-http returns a promise, so we need to await it
+const handler = serverless(app);
 
-// Export handler with error handling
-export default async (req: any, res: any) => {
-  try {
-    console.log(`[Serverless] ${req.method} ${req.url}`);
-    return await handler(req, res);
-  } catch (error) {
-    console.error('[Serverless] Error:', error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Internal server error', message: String(error) });
-    }
-  }
-};
+export default handler;
