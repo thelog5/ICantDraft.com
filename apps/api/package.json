@@ -4,9 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "prisma generate && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "demo:snapshot": "tsx scripts/createDemoSnapshot.ts"
+    "demo:snapshot": "tsx scripts/createDemoSnapshot.ts",
+    "prisma:generate": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
