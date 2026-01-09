@@ -5927,11 +5927,11 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
 
 
 // ---------- START ----------
-// Export for Vercel serverless functions
+// Export for Vercel serverless functions - MUST be at the end
 export default app;
 
-// Start server for local development
-if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+// Start server for local development only
+if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production' && process.env.VERCEL !== '1') {
   const port = Number(process.env.PORT ?? 3000);
   app.listen(port, () => {
     console.log(`api listening on :${port}`);
