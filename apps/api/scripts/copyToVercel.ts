@@ -67,16 +67,20 @@ async function copyToVercel() {
       console.log(`📤 Copying league: ${league.name} (${league.id})...`);
 
       await vercelPrisma.$transaction(async (tx) => {
-        // Copy league
+        // Copy league (include all required fields)
+        // Ensure provider is set (default to ESPN if missing)
+        const provider = league.provider || 'ESPN';
         const newLeague = await tx.league.create({
           data: {
             id: league.id,
-            provider: league.provider,
-            sport: league.sport,
+            provider: provider as any, // Cast to Provider enum
+            sport: league.sport || 'NBA',
             providerLeagueId: league.providerLeagueId,
             name: league.name,
             seasonYear: league.seasonYear,
             settings: league.settings,
+            commissionerUserId: league.commissionerUserId,
+            demoSnapshotId: league.demoSnapshotId,
             createdAt: league.createdAt,
             updatedAt: league.updatedAt,
           },
