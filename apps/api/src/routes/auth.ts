@@ -90,7 +90,7 @@ router.post('/espn/connect', async (req, res) => {
       });
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     const leagueName = data.settings?.name || 'Unknown League';
     const teams = (data.teams || []).map((t: any) => ({
@@ -167,7 +167,7 @@ router.post('/espn/select-team', async (req, res) => {
   // Update session with team
   await updateSession(sessionId, {
     providerTeamId: String(teamId),
-    teamId: team?.id || null,
+    teamId: team?.id,
   });
 
   return res.json({
