@@ -219,32 +219,13 @@ async function getTeamAvatarUrl(req: express.Request, teamDbId: string, demoSnap
       null;
 
     // 1) Always prefer the team logo if ESPN provides it
-    // Skip mystique URLs if we don't have credentials (they'll 401 anyway)
-    // and go straight to player headshot fallback
+    // Try ALL logos regardless of type - let the proxy handle 401s gracefully
+    // This matches how Joshua's Scary Team and Patrick's Painted work
     if (logo) {
-      try {
-        const logoUrl = new URL(logo);
-        const isMystique = logoUrl.hostname.includes('mystique');
-        const hasCredentials = !!(process.env.ESPN_S2 && process.env.ESPN_SWID);
-        
-        // Only try mystique URLs if we have credentials, otherwise skip to player headshot
-        if (isMystique && !hasCredentials) {
-          console.log(`[getTeamAvatarUrl] Skipping mystique logo (no credentials), will use player headshot fallback for team ${teamDbId}`);
-          // Fall through to player headshot
-        } else {
-          // Try CDN logos or mystique URLs with credentials
-          const proxiedLogo = proxiedImage(req, logo);
-          if (proxiedLogo) {
-            console.log(`[getTeamAvatarUrl] Using team logo for team ${teamDbId}: ${logo}`);
-            return proxiedLogo;
-          }
-        }
-      } catch (urlErr) {
-        // If logo is not a valid URL, try proxying it anyway (might be a relative path)
-        const proxiedLogo = proxiedImage(req, logo);
-        if (proxiedLogo) {
-          return proxiedLogo;
-        }
+      const proxiedLogo = proxiedImage(req, logo);
+      if (proxiedLogo) {
+        console.log(`[getTeamAvatarUrl] Using team logo for team ${teamDbId}: ${logo}`);
+        return proxiedLogo;
       }
     }
 
@@ -654,26 +635,55 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
     }
     
     // Fetch roster slots for each team with providerPlayerId for headshots
-    const allTeams = await Promise.all(allTeamsData.map(async (t: any) => {
-      const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
-      const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
-      return {
-        id: t.id,
-        name: t.name,
-        meta: t.meta,
-        providerTeamId: t.providerTeamId,
-        rosterSlots: currentSlots.map((slot: any) => ({
-          meta: slot.meta,
-          slotLabel: slot.slotLabel,
-          player: {
-            id: slot.playerId,
-            fullName: slot.player?.fullName || 'Unknown',
-            meta: slot.player?.meta || null,
-            providerPlayerId: slot.player?.providerPlayerId || null,
-          },
-        })),
-      };
+    // Use Promise.allSettled to handle individual team failures gracefully
+    const teamResults = await Promise.allSettled(allTeamsData.map(async (t: any) => {
+      try {
+        const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
+        const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
+        return {
+          id: t.id,
+          name: t.name,
+          meta: t.meta,
+          providerTeamId: t.providerTeamId,
+          rosterSlots: currentSlots.map((slot: any) => ({
+            meta: slot.meta,
+            slotLabel: slot.slotLabel,
+            player: {
+              id: slot.playerId,
+              fullName: slot.player?.fullName || 'Unknown',
+              meta: slot.player?.meta || null,
+              providerPlayerId: slot.player?.providerPlayerId || null,
+            },
+          })),
+        };
+      } catch (err) {
+        console.error(`[Weekly Projections] Error fetching roster slots for team ${t.id}:`, err);
+        // Return team with empty roster slots so it doesn't break the whole request
+        return {
+          id: t.id,
+          name: t.name,
+          meta: t.meta || {},
+          providerTeamId: t.providerTeamId,
+          rosterSlots: [],
+        };
+      }
     }));
+    
+    // Extract successful results, fallback to empty roster for failed ones
+    const allTeams = teamResults.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        console.error(`[Weekly Projections] Team ${allTeamsData[index]?.id} failed:`, result.reason);
+        return {
+          id: allTeamsData[index]?.id || 'unknown',
+          name: allTeamsData[index]?.name || 'Unknown',
+          meta: allTeamsData[index]?.meta || {},
+          providerTeamId: allTeamsData[index]?.providerTeamId || null,
+          rosterSlots: [],
+        };
+      }
+    });
 
     if (allTeams.length === 0) {
       console.error(`No teams with roster data found for league ${leagueId}, demoSnapshotId: ${demoSnapshotId}`);
@@ -4122,30 +4132,43 @@ app.get("/leagues/:leagueId/matchup/current", async (req, res) => {
     const teamMeta = (team.meta as any) || {};
     const matchupData = teamMeta.matchup || null;
 
-    if (!matchupData || !matchupData.opponentTeamId) {
-      return (res as any).json({ ok: false, reason: "No current matchup data available. Run ESPN data sync." });
+    // Always return ok: true with team data, even if matchup is not available
+    // This ensures the home page always shows team name and avatar
+    const allTeams = await getTeamsScoped(leagueId, demoSnapshotId);
+    
+    let opponent = null;
+    if (matchupData && matchupData.opponentTeamId) {
+      opponent = allTeams.find((t: any) => t.providerTeamId === String(matchupData.opponentTeamId));
     }
 
-    // Find opponent using demo scoped teams
-    const allTeams = await getTeamsScoped(leagueId, demoSnapshotId);
-    const opponent = allTeams.find((t: any) => t.providerTeamId === String(matchupData.opponentTeamId));
-
-    if (!opponent) return (res as any).json({ ok: false, reason: "Opponent team not found" });
-
     const teamAvatar = await getTeamAvatarUrl(req, team.id, demoSnapshotId);
-    const oppAvatar = await getTeamAvatarUrl(req, opponent.id, demoSnapshotId);
+    const oppAvatar = opponent ? await getTeamAvatarUrl(req, opponent.id, demoSnapshotId) : null;
 
-    const teamScore = `${matchupData.myCatsWon || 0}-${matchupData.myCatsLost || 0}-${matchupData.myCatsTied || 0}`;
-    const opponentScore = `${matchupData.oppCatsWon || 0}-${matchupData.oppCatsLost || 0}-${matchupData.oppCatsTied || 0}`;
+    // Return matchup data if available, otherwise return team info only
+    if (opponent && matchupData) {
+      const teamScore = `${matchupData.myCatsWon || 0}-${matchupData.myCatsLost || 0}-${matchupData.myCatsTied || 0}`;
+      const opponentScore = `${matchupData.oppCatsWon || 0}-${matchupData.oppCatsLost || 0}-${matchupData.oppCatsTied || 0}`;
 
-    return res.json({
-      ok: true,
-      league: { id: league.id, name: league.name },
-      team: { teamId: team.id, teamName: team.name, avatarUrl: teamAvatar },
-      opponent: { teamId: opponent.id, teamName: opponent.name, avatarUrl: oppAvatar },
-      score: { team: teamScore, opponent: opponentScore },
-      updatedAt: new Date().toISOString(),
-    });
+      return res.json({
+        ok: true,
+        league: { id: league.id, name: league.name },
+        team: { teamId: team.id, teamName: team.name, avatarUrl: teamAvatar },
+        opponent: { teamId: opponent.id, teamName: opponent.name, avatarUrl: oppAvatar },
+        score: { team: teamScore, opponent: opponentScore },
+        updatedAt: new Date().toISOString(),
+      });
+    } else {
+      // No matchup available, but return team info so home page can display team name
+      return res.json({
+        ok: true,
+        league: { id: league.id, name: league.name },
+        team: { teamId: team.id, teamName: team.name, avatarUrl: teamAvatar },
+        opponent: null,
+        score: null,
+        reason: matchupData ? "Opponent team not found" : "No current matchup data available. Run ESPN data sync.",
+        updatedAt: new Date().toISOString(),
+      });
+    }
   } catch (err) {
     console.error("Failed to fetch matchup:", err);
     return res.status(500).json({ error: "Failed to fetch matchup" });
