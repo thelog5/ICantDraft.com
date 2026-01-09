@@ -1,6 +1,5 @@
 import { PrismaClient } from '@prisma/client';
 import * as dotenv from 'dotenv';
-import { randomUUID } from 'crypto';
 
 // Load environment variables
 dotenv.config();
@@ -45,14 +44,9 @@ async function copyToVercel() {
     await vercelPrisma.$connect();
     console.log('   ✓ Vercel database connected\n');
 
-    // Get all leagues from local
+    // Get all leagues from local (without includes to avoid loading all data)
     console.log('📋 Fetching leagues from local database...');
-    const localLeagues = await localPrisma.league.findMany({
-      include: {
-        teams: true,
-        players: true,
-      },
-    });
+    const localLeagues = await localPrisma.league.findMany();
 
     if (localLeagues.length === 0) {
       console.error('❌ No leagues found in local database');
@@ -62,104 +56,131 @@ async function copyToVercel() {
 
     console.log(`   Found ${localLeagues.length} league(s)\n`);
 
-    // Copy each league
+    // Copy each league separately to avoid transaction timeouts
     for (const league of localLeagues) {
       console.log(`📤 Copying league: ${league.name} (${league.id})...`);
 
-      await vercelPrisma.$transaction(async (tx) => {
-        // Copy league (include all required fields)
-        // Ensure provider is set (default to ESPN if missing)
-        const provider = league.provider || 'ESPN';
-        const newLeague = await tx.league.create({
-          data: {
-            id: league.id,
-            provider: provider as any, // Cast to Provider enum
-            sport: league.sport || 'NBA',
-            providerLeagueId: league.providerLeagueId,
-            name: league.name,
-            seasonYear: league.seasonYear,
-            settings: league.settings,
-            commissionerUserId: league.commissionerUserId,
-            demoSnapshotId: league.demoSnapshotId,
-            createdAt: league.createdAt,
-            updatedAt: league.updatedAt,
+      // Ensure provider is set (default to ESPN if missing)
+      const provider = league.provider || 'ESPN';
+
+      // Copy league first
+      await vercelPrisma.league.upsert({
+        where: { id: league.id },
+        update: {},
+        create: {
+          id: league.id,
+          provider: provider as any,
+          sport: league.sport || 'NBA',
+          providerLeagueId: league.providerLeagueId,
+          name: league.name,
+          seasonYear: league.seasonYear,
+          settings: league.settings,
+          commissionerUserId: league.commissionerUserId,
+          demoSnapshotId: league.demoSnapshotId,
+          createdAt: league.createdAt,
+          updatedAt: league.updatedAt,
+        },
+      });
+
+      // Copy teams in batches
+      const teams = await localPrisma.team.findMany({ where: { leagueId: league.id } });
+      console.log(`   Copying ${teams.length} teams...`);
+      for (const team of teams) {
+        await vercelPrisma.team.upsert({
+          where: { id: team.id },
+          update: {},
+          create: {
+            id: team.id,
+            leagueId: team.leagueId,
+            provider: (team.provider || provider) as any,
+            providerTeamId: team.providerTeamId,
+            name: team.name,
+            managerName: team.managerName,
+            avatarUrl: team.avatarUrl,
+            settings: team.settings,
+            meta: team.meta,
+            demoSnapshotId: team.demoSnapshotId,
+            createdAt: team.createdAt,
+            updatedAt: team.updatedAt,
           },
         });
+      }
 
-        // Copy teams
-        console.log(`   Copying ${league.teams.length} teams...`);
-        for (const team of league.teams) {
-          await tx.team.create({
-            data: {
-              id: team.id,
-              leagueId: team.leagueId,
-              provider: (team.provider || provider) as any, // Use league provider as fallback
-              providerTeamId: team.providerTeamId,
-              name: team.name,
-              managerName: team.managerName,
-              avatarUrl: team.avatarUrl,
-              settings: team.settings,
-              meta: team.meta,
-              demoSnapshotId: team.demoSnapshotId,
-              createdAt: team.createdAt,
-              updatedAt: team.updatedAt,
-            },
-          });
-        }
-
-        // Copy players
-        console.log(`   Copying ${league.players.length} players...`);
-        for (const player of league.players) {
-          await tx.player.create({
-            data: {
-              id: player.id,
-              provider: (player.provider || provider) as any, // Use league provider as fallback
-              providerPlayerId: player.providerPlayerId,
-              fullName: player.fullName || player.name || 'Unknown Player', // fullName is required
-              name: player.name,
-              teamAbbr: player.teamAbbr,
-              positions: player.positions,
-              headshotUrl: player.headshotUrl,
-              stats: player.stats,
-              meta: player.meta,
-              demoSnapshotId: player.demoSnapshotId,
-              createdAt: player.createdAt,
-              updatedAt: player.updatedAt,
-            },
-          });
-        }
-
-        // Copy roster slots
-        const rosterSlots = await localPrisma.rosterSlot.findMany({
-          where: { leagueId: league.id },
-        });
-
-        if (rosterSlots.length > 0) {
-          console.log(`   Copying ${rosterSlots.length} roster slots...`);
-          for (const slot of rosterSlots) {
-            await tx.rosterSlot.create({
-              data: {
-                id: slot.id,
-                leagueId: slot.leagueId,
-                teamId: slot.teamId,
-                playerId: slot.playerId,
-                position: slot.position,
-                createdAt: slot.createdAt,
-                updatedAt: slot.updatedAt,
-              },
-            });
+      // Copy players in batches (only players for this league)
+      const players = await localPrisma.player.findMany({
+        where: {
+          leagues: {
+            some: { id: league.id }
           }
         }
-
-        console.log(`   ✓ League "${league.name}" copied successfully\n`);
       });
+      console.log(`   Copying ${players.length} players...`);
+      for (const player of players) {
+        await vercelPrisma.player.upsert({
+          where: { id: player.id },
+          update: {},
+          create: {
+            id: player.id,
+            provider: (player.provider || provider) as any,
+            providerPlayerId: player.providerPlayerId,
+            fullName: player.fullName || 'Unknown Player',
+            firstName: player.firstName,
+            lastName: player.lastName,
+            nbaTeamAbbr: player.nbaTeamAbbr,
+            positions: player.positions || [],
+            isActive: player.isActive !== undefined ? player.isActive : true,
+            meta: player.meta,
+            demoSnapshotId: player.demoSnapshotId,
+            createdAt: player.createdAt,
+            updatedAt: player.updatedAt,
+          },
+        });
+      }
+
+      // Link players to league
+      for (const player of players) {
+        await vercelPrisma.league.update({
+          where: { id: league.id },
+          data: {
+            players: {
+              connect: { id: player.id }
+            }
+          }
+        });
+      }
+
+      // Copy roster slots
+      const rosterSlots = await localPrisma.rosterSlot.findMany({
+        where: { leagueId: league.id },
+      });
+
+      if (rosterSlots.length > 0) {
+        console.log(`   Copying ${rosterSlots.length} roster slots...`);
+        for (const slot of rosterSlots) {
+          await vercelPrisma.rosterSlot.upsert({
+            where: { id: slot.id },
+            update: {},
+            create: {
+              id: slot.id,
+              leagueId: slot.leagueId,
+              teamId: slot.teamId,
+              playerId: slot.playerId,
+              position: slot.position,
+              createdAt: slot.createdAt,
+              updatedAt: slot.updatedAt,
+            },
+          });
+        }
+      }
+
+      console.log(`   ✓ League "${league.name}" copied successfully\n`);
     }
 
     console.log('✅ All data copied successfully!\n');
     console.log('📝 Next steps:');
     console.log('   1. Run the demo snapshot script:');
+    console.log(`      $env:DATABASE_URL="your-vercel-postgres-url"`);
     console.log(`      pnpm --filter api demo:snapshot --leagueId ${localLeagues[0].id} --label "Vercel Demo"`);
-    console.log('   2. Make sure VERCEL_DATABASE_URL is set when running the snapshot script');
 
   } catch (error: any) {
     console.error('❌ Error copying data:', error.message);
@@ -172,4 +193,3 @@ async function copyToVercel() {
 }
 
 copyToVercel();
-
