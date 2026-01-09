@@ -220,18 +220,3 @@ docs       — Architecture notes and screenshots (optional)
 
 ---
 
-## Repo Cleanup Suggestions (for a “finished product” feel)
-
-- Add screenshots/video section to README (already started above)
-- Add docs/ folder:
-  - docs/ARCHITECTURE.md (high-level system diagram + data flow)
-  - docs/DEPLOYMENT.md (Vercel setup, env vars, demo snapshot flow)
-- Add CONTRIBUTING.md with:
-  - dev setup steps
-  - lint/test commands
-  - branching conventions
-- Add a CHANGELOG.md (optional) or GitHub Releases
-- Add a root-level LICENSE if you plan to share publicly
-- Add status badges (build/deploy) if you want polish
-
----
