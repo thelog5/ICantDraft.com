@@ -219,11 +219,32 @@ async function getTeamAvatarUrl(req: express.Request, teamDbId: string, demoSnap
       null;
 
     // 1) Always prefer the team logo if ESPN provides it
+    // Skip mystique URLs if we don't have credentials (they'll 401 anyway)
+    // and go straight to player headshot fallback
     if (logo) {
-      const proxiedLogo = proxiedImage(req, logo);
-      if (proxiedLogo) {
-        console.log(`[getTeamAvatarUrl] Using team logo for team ${teamDbId}: ${logo}`);
-        return proxiedLogo;
+      try {
+        const logoUrl = new URL(logo);
+        const isMystique = logoUrl.hostname.includes('mystique');
+        const hasCredentials = !!(process.env.ESPN_S2 && process.env.ESPN_SWID);
+        
+        // Only try mystique URLs if we have credentials, otherwise skip to player headshot
+        if (isMystique && !hasCredentials) {
+          console.log(`[getTeamAvatarUrl] Skipping mystique logo (no credentials), will use player headshot fallback for team ${teamDbId}`);
+          // Fall through to player headshot
+        } else {
+          // Try CDN logos or mystique URLs with credentials
+          const proxiedLogo = proxiedImage(req, logo);
+          if (proxiedLogo) {
+            console.log(`[getTeamAvatarUrl] Using team logo for team ${teamDbId}: ${logo}`);
+            return proxiedLogo;
+          }
+        }
+      } catch (urlErr) {
+        // If logo is not a valid URL, try proxying it anyway (might be a relative path)
+        const proxiedLogo = proxiedImage(req, logo);
+        if (proxiedLogo) {
+          return proxiedLogo;
+        }
       }
     }
 
@@ -392,11 +413,19 @@ app.get("/proxy/image", async (req, res) => {
     "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
   };
 
-  if (u.hostname === "mystique-api.fantasy.espn.com") {
+  // ESPN mystique API requires authentication for team logos and manager avatars
+  if (u.hostname === "mystique-api.fantasy.espn.com" || u.hostname.includes("mystique")) {
     const espn_s2 = process.env.ESPN_S2;
     const swid = process.env.ESPN_SWID;
     if (espn_s2 && swid) {
-      headers["Cookie"] = `espn_s2=${espn_s2.trim()}; SWID=${swid.trim()}; swid=${swid.trim()};`;
+      // Normalize SWID format
+      let normalizedSwid = swid.trim();
+      if (!normalizedSwid.startsWith('{')) {
+        normalizedSwid = `{${normalizedSwid}}`;
+      }
+      headers["Cookie"] = `espn_s2=${espn_s2.trim()}; SWID=${normalizedSwid}; swid=${normalizedSwid};`;
+    } else {
+      console.warn(`[Image Proxy] ESPN credentials not available for mystique API request: ${u.toString()}`);
     }
   }
 
@@ -5089,28 +5118,53 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
     const allTeamsData = await getTeamsScoped(leagueId, demoSnapshotId);
     
     // Fetch roster slots for each team with player data
-    const allTeams = await Promise.all(allTeamsData.map(async (t: any) => {
-      const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
-      const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
-      
-      // Get player data for each slot (roster slots already include player via include)
-      const slotsWithPlayers = currentSlots.map((slot: any) => {
+    // Use Promise.allSettled to handle individual team failures gracefully
+    const teamResults = await Promise.allSettled(allTeamsData.map(async (t: any) => {
+      try {
+        const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
+        const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
+        
+        // Get player data for each slot (roster slots already include player via include)
+        const slotsWithPlayers = currentSlots.map((slot: any) => {
+          return {
+            meta: slot.meta,
+            player: { 
+              id: slot.playerId, 
+              meta: slot.player?.meta || null,
+              fullName: slot.player?.fullName || null,
+            },
+          };
+        });
+        
         return {
-          meta: slot.meta,
-          player: { 
-            id: slot.playerId, 
-            meta: slot.player?.meta || null,
-            fullName: slot.player?.fullName || null,
-          },
+          id: t.id,
+          name: t.name,
+          rosterSlots: slotsWithPlayers,
         };
-      });
-      
-      return {
-        id: t.id,
-        name: t.name,
-        rosterSlots: slotsWithPlayers,
-      };
+      } catch (err) {
+        console.error(`[Team Profile] Error fetching roster slots for team ${t.id}:`, err);
+        // Return team with empty roster slots so it doesn't break the whole request
+        return {
+          id: t.id,
+          name: t.name,
+          rosterSlots: [],
+        };
+      }
     }));
+    
+    // Extract successful results, fallback to empty roster for failed ones
+    const allTeams = teamResults.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        console.error(`[Team Profile] Team ${allTeamsData[index]?.id} failed:`, result.reason);
+        return {
+          id: allTeamsData[index]?.id || 'unknown',
+          name: allTeamsData[index]?.name || 'Unknown',
+          rosterSlots: [],
+        };
+      }
+    });
 
   const teamsTotals: TeamTotals[] = [];
 
