@@ -1,4 +1,7 @@
 {
+  "version": 2,
+  "buildCommand": "pnpm build",
+  "outputDirectory": "",
   "functions": {
     "api/index.ts": {
       "includeFiles": "dist/**"
