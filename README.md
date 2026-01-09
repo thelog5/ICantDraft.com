@@ -1,5 +1,7 @@
 # ICantDraft.com — Fantasy Basketball Analytics Platform
 
+Live site: https://i-cant-draft-com-web.vercel.app
+
 ICantDraft.com is a full-stack fantasy basketball analytics platform that ingests ESPN league data and produces deterministic, math-driven insights for competitive 9-category fantasy basketball leagues.
 
 The platform intentionally avoids machine learning and black-box models. All analytics are transparent, reproducible, and derived from well-defined statistical methods that mirror how experienced fantasy managers actually evaluate leagues.
@@ -21,14 +23,14 @@ The platform intentionally avoids machine learning and black-box models. All ana
 - ESPN fantasy league ingestion via authenticated requests
 - Deterministic 9-category analytics:
   - Points, Rebounds, Assists, Steals, Blocks, 3PT Made, FG%, FT%, Turnovers (inverted)
-- League-wide normalization using z-scores
+- League-wide normalization using z-scores (internal only; not exposed in the UI)
 - Attempt-weighted FG% and FT%
 - Inverted turnover scoring
 - Stable season-level category rankings based on per-game averages
 - Team profile pages including:
   - Category strengths and weaknesses
   - Relative league rankings
-  - Clear visual breakdowns without exposing raw statistical noise
+  - Clear visual breakdowns designed for decision-making
 
 ---
 
@@ -56,7 +58,7 @@ The platform intentionally avoids machine learning and black-box models. All ana
   - Category-specific contributions
   - Avoiding excessive damage to FG% and FT%
 - Impact previews showing how pickups change weekly totals
-- Drop candidate analysis based on player value, not team fit:
+- Drop candidate analysis based on player value (not team fit):
   - Uses roster percentage and relative value
   - Avoids recommending high-value players as drops
 - Distinction between:
@@ -141,6 +143,17 @@ All calculations are deterministic and computed server-side.
 
 ---
 
+## Deployment
+
+### Live (Vercel)
+This repo is deployed as two Vercel projects:
+- Web: https://oni-cant-draft-com-web.vercel.app
+- API: deployed separately (web is configured to call the API via VITE_API_BASE_URL)
+
+Demo mode is supported via a database snapshot so the site can be explored without requiring a user's ESPN cookies.
+
+---
+
 ## Local Development
 
 ### Prerequisites
@@ -152,9 +165,8 @@ All calculations are deterministic and computed server-side.
 
 ### Environment Setup
 
-Create a `.env` file in the repository root (do not commit it):
+Create a .env file in the repository root (do not commit it):
 
-```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/draftsite?schema=public"
 PORT=3000
 
@@ -165,46 +177,41 @@ ESPN_SWID="{YOUR_SWID_COOKIE}"
 
 ESPN_PLATFORM_VERSION="ec4491ff98dc3a672229031f460410e0746d6ecc"
 ESPN_BASE_URL="https://lm-api-reads.fantasy.espn.com"
-```
+
+---
+
 ### Install Dependencies
 
-```
 pnpm install
-```
 
 ---
 
 ### Database Setup
 
-```
 pnpm prisma:generate
 pnpm prisma:migrate
-```
 
 ---
 
 ### Run Backend API
 
-```
 pnpm -C apps/api dev
-```
+
 API runs on:
 http://localhost:3000
-
 
 ---
 
 ### Run Frontend
 
-```
 pnpm -C apps/web dev
-```
+
 Web runs on:
 http://localhost:5173
 
 ---
 
-### Project Structure
+## Project Structure
 
 apps/api   — Express API and analytics engine  
 apps/web   — React and Vite frontend  
@@ -213,29 +220,18 @@ docs       — Architecture notes and screenshots (optional)
 
 ---
 
-### Design Principles
+## Repo Cleanup Suggestions (for a “finished product” feel)
 
-- Deterministic analytics only
-- No black-box models
-- Transparent statistical methods
-- Attempt-weighted shooting percentages
-- Inverted turnover scoring
-
-Clear separation between:
-- Season evaluation
-- Weekly matchup analysis
-- Streaming decisions
-
-Built like a production backend system.
+- Add screenshots/video section to README (already started above)
+- Add docs/ folder:
+  - docs/ARCHITECTURE.md (high-level system diagram + data flow)
+  - docs/DEPLOYMENT.md (Vercel setup, env vars, demo snapshot flow)
+- Add CONTRIBUTING.md with:
+  - dev setup steps
+  - lint/test commands
+  - branching conventions
+- Add a CHANGELOG.md (optional) or GitHub Releases
+- Add a root-level LICENSE if you plan to share publicly
+- Add status badges (build/deploy) if you want polish
 
 ---
-
-### Status
-
-ICantDraft.com is under active development.
-
-Current focus areas include:
-- Refining trade balance logic
-- Improving streaming heuristics
-- UI clarity and performance
-- Validation and debugging tooling
