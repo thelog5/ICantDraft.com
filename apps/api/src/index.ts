@@ -219,13 +219,32 @@ async function getTeamAvatarUrl(req: express.Request, teamDbId: string, demoSnap
       null;
 
     // 1) Always prefer the team logo if ESPN provides it
-    // Try ALL logos regardless of type - let the proxy handle 401s gracefully
-    // This matches how Joshua's Scary Team and Patrick's Painted work
+    // BUT: Skip mystique URLs if we don't have credentials (they'll 401 and return green transparent PNG)
+    // Go straight to player headshot for mystique URLs without credentials
     if (logo) {
-      const proxiedLogo = proxiedImage(req, logo);
-      if (proxiedLogo) {
-        console.log(`[getTeamAvatarUrl] Using team logo for team ${teamDbId}: ${logo}`);
-        return proxiedLogo;
+      try {
+        const logoUrl = new URL(logo);
+        const isMystique = logoUrl.hostname.includes('mystique');
+        const hasCredentials = !!(process.env.ESPN_S2 && process.env.ESPN_SWID);
+        
+        // Skip mystique URLs without credentials - they'll just return green transparent PNG
+        if (isMystique && !hasCredentials) {
+          console.log(`[getTeamAvatarUrl] Skipping mystique logo (no credentials) for team ${teamDbId}, using player headshot fallback`);
+          // Fall through to player headshot
+        } else {
+          // Try CDN logos or mystique URLs with credentials
+          const proxiedLogo = proxiedImage(req, logo);
+          if (proxiedLogo) {
+            console.log(`[getTeamAvatarUrl] Using team logo for team ${teamDbId}: ${logo}`);
+            return proxiedLogo;
+          }
+        }
+      } catch (urlErr) {
+        // If logo is not a valid URL, try proxying it anyway (might be a relative path)
+        const proxiedLogo = proxiedImage(req, logo);
+        if (proxiedLogo) {
+          return proxiedLogo;
+        }
       }
     }
 
@@ -635,10 +654,17 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
     }
     
     // Fetch roster slots for each team with providerPlayerId for headshots
-    // Use Promise.allSettled to handle individual team failures gracefully
+    // Use Promise.allSettled with timeout to handle individual team failures gracefully
     const teamResults = await Promise.allSettled(allTeamsData.map(async (t: any) => {
       try {
-        const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
+        // Add timeout to prevent hanging
+        const rosterSlots = await Promise.race([
+          getRosterSlotsScoped(leagueId, t.id, demoSnapshotId),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout fetching roster slots')), 10000)
+          )
+        ]) as any[];
+        
         const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
         return {
           id: t.id,
@@ -1021,7 +1047,8 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
     console.error("[Weekly Projections] Error fetching weekly projections:", err);
     console.error("[Weekly Projections] Stack trace:", err instanceof Error ? err.stack : 'No stack trace');
     return res.status(500).json({ 
-      error: "Failed to fetch weekly projections",
+      error: "This page takes a moment to load. Please try refreshing the page.",
+      message: "Weekly projections are calculating for all teams. If this persists, try reloading.",
       details: err instanceof Error ? err.message : String(err)
     });
   }
@@ -5141,10 +5168,17 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
     const allTeamsData = await getTeamsScoped(leagueId, demoSnapshotId);
     
     // Fetch roster slots for each team with player data
-    // Use Promise.allSettled to handle individual team failures gracefully
+    // Use Promise.allSettled with timeout to handle individual team failures gracefully
     const teamResults = await Promise.allSettled(allTeamsData.map(async (t: any) => {
       try {
-        const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
+        // Add timeout to prevent hanging
+        const rosterSlots = await Promise.race([
+          getRosterSlotsScoped(leagueId, t.id, demoSnapshotId),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout fetching roster slots')), 10000)
+          )
+        ]) as any[];
+        
         const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
         
         // Get player data for each slot (roster slots already include player via include)
@@ -5325,7 +5359,8 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
     console.error("[Team Profile] Error fetching team profile:", error);
     console.error("[Team Profile] Stack trace:", error instanceof Error ? error.stack : 'No stack trace');
     return (res as any).status(500).json({ 
-      error: "Failed to fetch team profile",
+      error: "This page takes a moment to load. Please try refreshing the page.",
+      message: "Team analysis is calculating stats for all teams in the league. If this persists, try reloading.",
       details: error instanceof Error ? error.message : String(error)
     });
   }
@@ -5494,23 +5529,55 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
   const allTeamsData = await getTeamsScoped(leagueId, demoSnapshotId);
   
   // Fetch roster slots for each team
-  const allTeams = await Promise.all(allTeamsData.map(async (t: any) => {
-    const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
-    const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
-    return {
-      id: t.id,
-      name: t.name,
-      rosterSlots: currentSlots.map((slot: any) => ({
-        meta: slot.meta,
-        player: {
-          id: slot.playerId,
-          fullName: slot.player?.fullName || 'Unknown',
-          meta: slot.player?.meta || null,
-          providerPlayerId: slot.player?.providerPlayerId || null,
-        },
-      })),
-    };
+  // Use Promise.allSettled with timeout to handle individual team failures gracefully
+  const teamResults = await Promise.allSettled(allTeamsData.map(async (t: any) => {
+    try {
+      // Add timeout to prevent hanging
+      const rosterSlots = await Promise.race([
+        getRosterSlotsScoped(leagueId, t.id, demoSnapshotId),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout fetching roster slots')), 10000)
+        )
+      ]) as any[];
+      
+      const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
+      return {
+        id: t.id,
+        name: t.name,
+        rosterSlots: currentSlots.map((slot: any) => ({
+          meta: slot.meta,
+          player: {
+            id: slot.playerId,
+            fullName: slot.player?.fullName || 'Unknown',
+            meta: slot.player?.meta || null,
+            providerPlayerId: slot.player?.providerPlayerId || null,
+          },
+        })),
+      };
+    } catch (err) {
+      console.error(`[Trade Suggestions] Error fetching roster slots for team ${t.id}:`, err);
+      // Return team with empty roster slots so it doesn't break the whole request
+      return {
+        id: t.id,
+        name: t.name,
+        rosterSlots: [],
+      };
+    }
   }));
+  
+  // Extract successful results, fallback to empty roster for failed ones
+  const allTeams = teamResults.map((result, index) => {
+    if (result.status === 'fulfilled') {
+      return result.value;
+    } else {
+      console.error(`[Trade Suggestions] Team ${allTeamsData[index]?.id} failed:`, result.reason);
+      return {
+        id: allTeamsData[index]?.id || 'unknown',
+        name: allTeamsData[index]?.name || 'Unknown',
+        rosterSlots: [],
+      };
+    }
+  });
 
   // Compute team totals for all teams (for league distribution)
   const teamsTotals: TeamTotals[] = [];
@@ -6369,7 +6436,8 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
     console.error("[Trade Suggestions] Error:", error);
     return res.status(500).json({ 
       ok: false,
-      error: "Failed to fetch trade suggestions",
+      error: "This page takes a moment to load. Please try refreshing the page.",
+      message: "Trade suggestions are analyzing all teams and players. If this persists, try reloading.",
       details: error instanceof Error ? error.message : String(error)
     });
   }
