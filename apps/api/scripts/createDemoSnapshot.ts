@@ -59,6 +59,7 @@ async function createDemoSnapshot() {
   console.log('');
   
   try {
+    // Increase transaction timeout to 60 seconds for large data operations
     const result = await prisma.$transaction(async (tx) => {
       // 1. Create the DemoSnapshot
       console.log('Step 1: Creating DemoSnapshot record...');
@@ -212,6 +213,8 @@ async function createDemoSnapshot() {
           rosterSlots: sourceLeague.rosterSlots.length,
         },
       };
+    }, {
+      timeout: 60000, // 60 seconds timeout for large transactions
     });
     
     console.log('='.repeat(60));

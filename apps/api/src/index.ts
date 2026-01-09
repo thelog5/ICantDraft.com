@@ -187,6 +187,16 @@ function proxiedImage(req: express.Request, url: string | null) {
   return `${base}/proxy/image?url=${encodeURIComponent(fixed)}`;
 }
 
+/**
+ * Clean providerPlayerId by removing demo snapshot suffix
+ * e.g., "12345_demo_v1" -> "12345"
+ */
+function cleanProviderPlayerId(providerPlayerId: string | null): string | null {
+  if (!providerPlayerId) return null;
+  // Remove _demo_* suffix if present
+  return providerPlayerId.split('_demo_')[0];
+}
+
 async function getTeamAvatarUrl(req: express.Request, teamDbId: string) {
   const team = await prisma.team.findUnique({
     where: { id: teamDbId },
@@ -426,10 +436,13 @@ app.get("/leagues/:leagueId/teams/:teamId/roster", async (req, res) => {
 
       let headshotUrl: string | null = null;
       if (player.providerPlayerId) {
-        headshotUrl = proxiedImage(
-          req,
-          `https://a.espncdn.com/i/headshots/nba/players/full/${player.providerPlayerId}.png`
-        );
+        const cleanPlayerId = cleanProviderPlayerId(player.providerPlayerId);
+        if (cleanPlayerId) {
+          headshotUrl = proxiedImage(
+            req,
+            `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`
+          );
+        }
       }
 
       return {
@@ -993,8 +1006,9 @@ app.get("/leagues/:leagueId/free-agents", async (req, res) => {
       };
 
       // Generate headshot URL
-      const headshotUrl = player.providerPlayerId
-        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${player.providerPlayerId}.png`)
+      const cleanPlayerId = cleanProviderPlayerId(player.providerPlayerId);
+      const headshotUrl = cleanPlayerId
+        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`)
         : null;
 
       processedFreeAgents.push({
@@ -1827,9 +1841,10 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
           playerId: p.id,
           name: p.fullName,
           teamAbbr: (p.meta as any)?.proTeamAbbr || "FA",
-          headshotUrl: p.providerPlayerId
-            ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${p.providerPlayerId}.png`)
-            : null,
+          headshotUrl: (() => {
+            const cleanId = cleanProviderPlayerId(p.providerPlayerId);
+            return cleanId ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanId}.png`) : null;
+          })(),
           gamesThisWeek,
           gamesByDay,
           scheduleText,
@@ -2147,9 +2162,10 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
           playerId: slot.player.id,
           name: slot.player.fullName,
           teamAbbr: (slot.player.meta as any)?.proTeamAbbr || "N/A",
-          headshotUrl: slot.player.providerPlayerId
-            ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${slot.player.providerPlayerId}.png`)
-            : null,
+          headshotUrl: (() => {
+            const cleanId = cleanProviderPlayerId(slot.player.providerPlayerId);
+            return cleanId ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanId}.png`) : null;
+          })(),
           gamesByDay,
           gamesRemaining: gamesThisWeek,
           projectedTotals: {
@@ -2465,9 +2481,10 @@ app.get("/leagues/:leagueId/streaming/schedule", async (req, res) => {
         .map((slot) => ({
           playerId: slot.player.id,
           name: slot.player.fullName,
-          headshotUrl: slot.player.providerPlayerId
-            ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${slot.player.providerPlayerId}.png`)
-            : null,
+          headshotUrl: (() => {
+            const cleanId = cleanProviderPlayerId(slot.player.providerPlayerId);
+            return cleanId ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanId}.png`) : null;
+          })(),
           positions: slot.player.positions,
         }));
 
@@ -2481,9 +2498,10 @@ app.get("/leagues/:leagueId/streaming/schedule", async (req, res) => {
             .map((slot) => ({
               playerId: slot.player.id,
               name: slot.player.fullName,
-              headshotUrl: slot.player.providerPlayerId
-                ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${slot.player.providerPlayerId}.png`)
-                : null,
+              headshotUrl: (() => {
+                const cleanId = cleanProviderPlayerId(slot.player.providerPlayerId);
+                return cleanId ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanId}.png`) : null;
+              })(),
               positions: slot.player.positions,
             }))
         : [];
@@ -2502,9 +2520,10 @@ app.get("/leagues/:leagueId/streaming/schedule", async (req, res) => {
           return {
             playerId: p.id,
             name: p.fullName,
-            headshotUrl: p.providerPlayerId
-              ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${p.providerPlayerId}.png`)
-              : null,
+            headshotUrl: (() => {
+              const cleanId = cleanProviderPlayerId(p.providerPlayerId);
+              return cleanId ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanId}.png`) : null;
+            })(),
             positions: p.positions,
             gamesThisWeek,
             playsToday: true,
@@ -2857,8 +2876,9 @@ app.get("/leagues/:leagueId/streaming/plan", async (req, res) => {
 
       const suggestedDrop = dropCandidates[0] || null;
 
-      const headshotUrl = bestAdd.player.providerPlayerId
-        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${bestAdd.player.providerPlayerId}.png`)
+      const cleanPlayerId = cleanProviderPlayerId(bestAdd.player.providerPlayerId);
+      const headshotUrl = cleanPlayerId
+        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`)
         : null;
 
       dailyPlan.push({
@@ -4894,17 +4914,13 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
       const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
       const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
       
-      // Get player data for each slot
-      const slotsWithPlayers = await Promise.all(currentSlots.map(async (slot: any) => {
-        const player = await prisma.player.findUnique({
-          where: { id: slot.playerId },
-          select: { id: true, meta: true },
-        });
+      // Get player data for each slot (roster slots already include player via include)
+      const slotsWithPlayers = currentSlots.map((slot: any) => {
         return {
           meta: slot.meta,
-          player: { id: slot.playerId, meta: player?.meta || null },
+          player: { id: slot.playerId, meta: slot.player?.meta || null },
         };
-      }));
+      });
       
       return {
         id: t.id,
@@ -5213,8 +5229,9 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
   const myPlayers: PlayerValue[] = [];
   for (const slot of myTeam.rosterSlots) {
     const slotMeta = (slot.meta as any) || {};
-    const headshotUrl = slot.player.providerPlayerId
-      ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${slot.player.providerPlayerId}.png`)
+    const cleanPlayerId = cleanProviderPlayerId(slot.player.providerPlayerId);
+    const headshotUrl = cleanPlayerId
+      ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`)
       : null;
     const playerValue = computePlayerValue(
       {

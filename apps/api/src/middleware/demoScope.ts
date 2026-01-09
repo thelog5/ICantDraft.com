@@ -155,6 +155,14 @@ export async function getRosterSlotsScoped(
   teamId: string | null,
   demoSnapshotId: string | null
 ): Promise<any[]> {
+  // First, check if the league is a demo league
+  const league = await getPrisma().league.findUnique({
+    where: { id: leagueId },
+    select: { demoSnapshotId: true },
+  });
+  
+  const isDemoLeague = !!league?.demoSnapshotId;
+  
   const where: any = {
     leagueId,
   };
@@ -163,9 +171,13 @@ export async function getRosterSlotsScoped(
     where.teamId = teamId;
   }
   
-  // If in demo mode, restrict to demo snapshot
+  // If we have a demoSnapshotId, use it for filtering
   if (demoSnapshotId) {
+    // In demo mode, restrict to demo snapshot
     where.demoSnapshotId = demoSnapshotId;
+  } else if (isDemoLeague) {
+    // League is a demo league but no cookie yet - allow demo roster slots
+    where.demoSnapshotId = league.demoSnapshotId;
   } else {
     // In live mode, only allow non-demo roster slots
     where.demoSnapshotId = null;
