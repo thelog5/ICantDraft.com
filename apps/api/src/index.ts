@@ -322,9 +322,10 @@ app.get("/proxy/image", async (req, res) => {
   }
 
   try {
-    const r: globalThis.Response = await fetch(u.toString(), { redirect: "follow", headers });
+    // @ts-ignore - fetch Response type
+    const r = await fetch(u.toString(), { redirect: "follow", headers });
 
-    if (!r.ok) {
+    if (!(r as any).ok) {
       // log upstream so you can see if it's 403 vs 404
       console.error("proxy/image upstream failed", {
         url: u.toString(),
@@ -3983,14 +3984,16 @@ app.get("/debug/espn-player", async (_req, res) => {
   });
 
   if (!(r as any).ok) {
+    // @ts-ignore - fetch Response type
     const text = await r.text().catch(() => "");
-    return res.status(502).json({ error: "ESPN fetch failed", status: r.status, snippet: text.slice(0, 300) });
+    return (res as any).status(502).json({ error: "ESPN fetch failed", status: (r as any).status, snippet: text.slice(0, 300) });
   }
 
+  // @ts-ignore - fetch Response type
   const data: any = await r.json();
   const player = data?.teams?.[0]?.roster?.entries?.[0]?.playerPoolEntry?.player ?? null;
 
-  return res.status(200).json({ ok: true, player });
+  return (res as any).status(200).json({ ok: true, player });
 });
 
 // Debug endpoint for player stats selection
