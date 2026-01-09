@@ -147,7 +147,7 @@ All calculations are deterministic and computed server-side.
 
 ### Live (Vercel)
 This repo is deployed as two Vercel projects:
-- Web: https://oni-cant-draft-com-web.vercel.app
+- Web: https://i-cant-draft-com-web.vercel.app
 - API: deployed separately (web is configured to call the API via VITE_API_BASE_URL)
 
 Demo mode is supported via a database snapshot so the site can be explored without requiring a user's ESPN cookies.
