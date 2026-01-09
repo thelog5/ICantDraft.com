@@ -1,8 +1,6 @@
-// @ts-ignore - PrismaClient is generated at build time
-import { PrismaClient } from '@prisma/client';
+// Use shared PrismaClient instance
+import prisma from './prisma.js';
 import { encrypt, decrypt, encodeCredentials, decodeCredentials } from './encryption.js';
-
-const prisma = new PrismaClient();
 
 export interface SessionData {
   id: string;

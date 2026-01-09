@@ -1,14 +1,12 @@
 import express from 'express';
-// @ts-ignore - PrismaClient is generated at build time
-import { PrismaClient } from '@prisma/client';
+// Use shared PrismaClient instance
+import prisma from '../lib/prisma.js';
 import {
   createSession,
   getSession,
   deleteSession,
   updateSession,
 } from '../lib/sessionManager.js';
-
-const prisma = new PrismaClient();
 const router = express.Router();
 
 // Rate limiting map (simple in-memory, resets on restart)

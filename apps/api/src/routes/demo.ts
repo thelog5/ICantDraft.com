@@ -1,18 +1,8 @@
 import express, { Request, Response } from 'express';
-// @ts-ignore - PrismaClient is generated at build time
-import { PrismaClient } from '@prisma/client';
+// Use shared PrismaClient instance
+import prisma from '../lib/prisma.js';
 
 const router = express.Router();
-
-// Use singleton pattern
-let prismaInstance: PrismaClient | null = null;
-
-function getPrisma(): PrismaClient {
-  if (!prismaInstance) {
-    prismaInstance = new PrismaClient();
-  }
-  return prismaInstance;
-}
 
 /**
  * GET /demo/snapshots
@@ -20,7 +10,7 @@ function getPrisma(): PrismaClient {
  */
 router.get('/snapshots', async (req: express.Request, res: express.Response) => {
   try {
-    const snapshots = await getPrisma().demoSnapshot.findMany({
+    const snapshots = await prisma.demoSnapshot.findMany({
       select: {
         id: true,
         label: true,
@@ -61,7 +51,7 @@ router.post('/start', async (req: express.Request, res: express.Response) => {
     }
 
     // Verify the snapshot exists
-    const snapshot = await getPrisma().demoSnapshot.findUnique({
+    const snapshot = await prisma.demoSnapshot.findUnique({
       where: { id: snapshotId },
     });
 
@@ -73,7 +63,7 @@ router.post('/start', async (req: express.Request, res: express.Response) => {
     }
 
     // Find the demo league for this snapshot
-    const demoLeague = await getPrisma().league.findFirst({
+    const demoLeague = await prisma.league.findFirst({
       where: {
         demoSnapshotId: snapshotId,
       },
@@ -187,7 +177,7 @@ router.get('/status', async (req: express.Request, res: express.Response) => {
     }
 
     // Verify the snapshot still exists
-    const snapshot = await getPrisma().demoSnapshot.findUnique({
+    const snapshot = await prisma.demoSnapshot.findUnique({
       where: { id: demoSnapshotId },
     });
 
@@ -209,7 +199,7 @@ router.get('/status', async (req: express.Request, res: express.Response) => {
     }
 
     // Find the demo league
-    const demoLeague = await getPrisma().league.findFirst({
+    const demoLeague = await prisma.league.findFirst({
       where: {
         demoSnapshotId,
       },

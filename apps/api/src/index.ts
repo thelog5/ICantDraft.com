@@ -3,8 +3,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import express from "express";
 import cookieParser from "cookie-parser";
-// @ts-ignore - PrismaClient is generated at build time
-import { PrismaClient } from "@prisma/client";
+// Use shared PrismaClient instance
+import { prisma } from "./lib/prisma.js";
 import {
   extractPlayerStats,
   aggregateTeam,
@@ -119,7 +119,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const prisma = new PrismaClient();
+// Prisma client imported from lib/prisma.ts
 
 // ---------- AUTH ROUTES ----------
 import authRouter from './routes/auth.js';
@@ -405,13 +405,27 @@ app.get("/proxy/image", async (req, res) => {
     const r = await fetch(u.toString(), { redirect: "follow", headers });
 
     if (!(r as any).ok) {
-      // log upstream so you can see if it's 403 vs 404
+      // Log upstream errors but don't crash - return a transparent 1x1 PNG for 401/403/404
+      const status = (r as any).status;
       console.error("proxy/image upstream failed", {
         url: u.toString(),
-        status: (r as any).status,
+        status,
         contentType: (r as any).headers.get("content-type"),
       });
-      return (res as any).status(404).json({ error: "Image not found", status: (r as any).status });
+      
+      // For 401/403/404, return a transparent 1x1 PNG instead of error
+      // This prevents broken image icons in the UI
+      if (status === 401 || status === 403 || status === 404) {
+        const transparentPng = Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+          'base64'
+        );
+        res.setHeader("Content-Type", "image/png");
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        return res.status(200).send(transparentPng);
+      }
+      
+      return (res as any).status(404).json({ error: "Image not found", status });
     }
 
     const buf = Buffer.from(await (r as any).arrayBuffer());

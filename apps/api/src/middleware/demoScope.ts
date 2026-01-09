@@ -1,16 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
-// @ts-ignore - PrismaClient is generated at build time
-import { PrismaClient } from '@prisma/client';
-
-// Use singleton pattern - import from main app or create once
-let prismaInstance: PrismaClient | null = null;
-
-function getPrisma(): PrismaClient {
-  if (!prismaInstance) {
-    prismaInstance = new PrismaClient();
-  }
-  return prismaInstance;
-}
+// Use shared PrismaClient instance
+import prisma, { withRetry } from '../lib/prisma.js';
 
 export interface DemoScopeContext {
   demoSnapshotId: string | null;
@@ -47,13 +37,13 @@ export async function getLeagueScoped(
   demoSnapshotId: string | null
 ): Promise<any | null> {
   // First try to find by ID only (works for both demo and non-demo)
-  let league = await getPrisma().league.findUnique({
+  let league = await withRetry(() => prisma.league.findUnique({
     where: { id: leagueId },
     include: {
       teams: true,
       players: true,
     },
-  });
+  }));
   
   if (!league) {
     return null;
@@ -88,12 +78,12 @@ export async function getTeamScoped(
   demoSnapshotId: string | null
 ): Promise<any | null> {
   // First try to find by ID only (works for both demo and non-demo)
-  let team = await getPrisma().team.findUnique({
+  let team = await withRetry(() => prisma.team.findUnique({
     where: { id: teamId },
     include: {
       league: true,
     },
-  });
+  }));
   
   if (!team) {
     return null;
@@ -142,9 +132,9 @@ export async function getPlayersScoped(
     where.demoSnapshotId = null;
   }
   
-  return getPrisma().player.findMany({
+  return withRetry(() => prisma.player.findMany({
     where,
-  });
+  }));
 }
 
 /**
@@ -156,10 +146,10 @@ export async function getRosterSlotsScoped(
   demoSnapshotId: string | null
 ): Promise<any[]> {
   // First, check if the league is a demo league
-  const league = await getPrisma().league.findUnique({
+  const league = await withRetry(() => prisma.league.findUnique({
     where: { id: leagueId },
     select: { demoSnapshotId: true },
-  });
+  }));
   
   if (!league) {
     console.error(`[getRosterSlotsScoped] League not found: ${leagueId}`);
@@ -188,7 +178,7 @@ export async function getRosterSlotsScoped(
     where.demoSnapshotId = null;
   }
   
-  const rosterSlots = await getPrisma().rosterSlot.findMany({
+  const rosterSlots = await withRetry(() => prisma.rosterSlot.findMany({
     where,
     include: {
       player: true,
@@ -197,7 +187,7 @@ export async function getRosterSlotsScoped(
     orderBy: {
       startAt: 'desc',
     },
-  });
+  }));
   
   // Debug logging
   console.log(`[getRosterSlotsScoped] leagueId: ${leagueId}, teamId: ${teamId}, demoSnapshotId: ${demoSnapshotId}`);
@@ -220,10 +210,10 @@ export async function getTeamsScoped(
 ): Promise<any[]> {
   try {
     // First, check if the league is a demo league (similar to getRosterSlotsScoped)
-    const league = await getPrisma().league.findUnique({
+    const league = await withRetry(() => prisma.league.findUnique({
       where: { id: leagueId },
       select: { demoSnapshotId: true },
-    });
+    }));
     
     if (!league) {
       console.error(`[getTeamsScoped] League not found: ${leagueId}`);
@@ -248,21 +238,21 @@ export async function getTeamsScoped(
       where.demoSnapshotId = null;
     }
     
-    const teams = await getPrisma().team.findMany({
+    const teams = await withRetry(() => prisma.team.findMany({
       where,
       orderBy: {
         name: 'asc',
       },
-    });
+    }));
     
     console.log(`[getTeamsScoped] leagueId: ${leagueId}, demoSnapshotId: ${demoSnapshotId}, isDemoLeague: ${isDemoLeague}, league.demoSnapshotId: ${league?.demoSnapshotId || 'null'}, where.demoSnapshotId: ${where.demoSnapshotId}, found ${teams.length} teams`);
     
     // If no teams found, try without demoSnapshotId filter to see if teams exist at all
     if (teams.length === 0) {
-      const allTeamsInLeague = await getPrisma().team.findMany({
+      const allTeamsInLeague = await withRetry(() => prisma.team.findMany({
         where: { leagueId },
         select: { id: true, name: true, demoSnapshotId: true },
-      });
+      }));
       console.log(`[getTeamsScoped] DEBUG: Found ${allTeamsInLeague.length} total teams in league (ignoring demo filter)`);
       if (allTeamsInLeague.length > 0) {
         console.log(`[getTeamsScoped] DEBUG: Team demoSnapshotIds: ${allTeamsInLeague.map(t => `${t.name}:${t.demoSnapshotId || 'null'}`).join(', ')}`);
