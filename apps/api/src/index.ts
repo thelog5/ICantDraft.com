@@ -198,51 +198,72 @@ function cleanProviderPlayerId(providerPlayerId: string | null): string | null {
 }
 
 async function getTeamAvatarUrl(req: express.Request, teamDbId: string, demoSnapshotId: string | null = null) {
-  // Use demo scoped team lookup
-  const team = await getTeamScoped(teamDbId, demoSnapshotId);
-  if (!team) return null;
-
-  const meta = (team.meta as any) || {};
-
-  // ESPN logo fields vary a lot; try them all
-  const logo =
-    meta.logo ||
-    meta.logoUrl ||
-    meta.teamLogo ||
-    meta?.logos?.[0]?.href ||
-    meta?.logos?.[0]?.url ||
-    meta?.logoUrls?.[0] ||
-    null;
-
-  // 1) Always prefer the team logo if ESPN provides it
-  const proxiedLogo = proxiedImage(req, logo);
-  if (proxiedLogo) return proxiedLogo;
-
-  // 2) Fallback: first roster player's headshot (use demo scoped roster slots)
-  const league = await prisma.league.findFirst({
-    where: { teams: { some: { id: teamDbId } } },
-    select: { id: true, demoSnapshotId: true },
-  });
-  
-  if (!league) return null;
-  
-  // Use getRosterSlotsScoped to respect demo scope
-  const rosterSlots = await getRosterSlotsScoped(league.id, teamDbId, demoSnapshotId);
-  const currentSlots = rosterSlots.filter(slot => slot.endAt === null);
-  
-  // Find first slot with a player that has a providerPlayerId
-  const firstRoster = currentSlots.find(slot => slot.player?.providerPlayerId);
-
-  const pid = firstRoster?.player?.providerPlayerId;
-  if (pid) {
-    const cleanPlayerId = cleanProviderPlayerId(pid);
-    if (cleanPlayerId) {
-      const headshot = `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`;
-      return proxiedImage(req, headshot);
+  try {
+    // Use demo scoped team lookup
+    const team = await getTeamScoped(teamDbId, demoSnapshotId);
+    if (!team) {
+      console.warn(`[getTeamAvatarUrl] Team not found: ${teamDbId}, demoSnapshotId: ${demoSnapshotId}`);
+      return null;
     }
-  }
 
-  return null;
+    const meta = (team.meta as any) || {};
+
+    // ESPN logo fields vary a lot; try them all
+    const logo =
+      meta.logo ||
+      meta.logoUrl ||
+      meta.teamLogo ||
+      meta?.logos?.[0]?.href ||
+      meta?.logos?.[0]?.url ||
+      meta?.logoUrls?.[0] ||
+      null;
+
+    // 1) Always prefer the team logo if ESPN provides it
+    if (logo) {
+      const proxiedLogo = proxiedImage(req, logo);
+      if (proxiedLogo) {
+        console.log(`[getTeamAvatarUrl] Using team logo for team ${teamDbId}: ${logo}`);
+        return proxiedLogo;
+      }
+    }
+
+    // 2) Fallback: first roster player's headshot (use demo scoped roster slots)
+    const league = await prisma.league.findFirst({
+      where: { teams: { some: { id: teamDbId } } },
+      select: { id: true, demoSnapshotId: true },
+    });
+    
+    if (!league) {
+      console.warn(`[getTeamAvatarUrl] League not found for team ${teamDbId}`);
+      return null;
+    }
+    
+    // Use getRosterSlotsScoped to respect demo scope
+    const rosterSlots = await getRosterSlotsScoped(league.id, teamDbId, demoSnapshotId);
+    const currentSlots = rosterSlots.filter(slot => slot.endAt === null);
+    
+    // Find first slot with a player that has a providerPlayerId
+    const firstRoster = currentSlots.find(slot => slot.player?.providerPlayerId);
+
+    const pid = firstRoster?.player?.providerPlayerId;
+    if (pid) {
+      const cleanPlayerId = cleanProviderPlayerId(pid);
+      if (cleanPlayerId) {
+        const headshot = `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`;
+        const proxiedHeadshot = proxiedImage(req, headshot);
+        if (proxiedHeadshot) {
+          console.log(`[getTeamAvatarUrl] Using player headshot fallback for team ${teamDbId}: ${cleanPlayerId}`);
+          return proxiedHeadshot;
+        }
+      }
+    }
+
+    console.warn(`[getTeamAvatarUrl] No avatar found for team ${teamDbId} (${team.name}), logo: ${logo ? 'found but failed to proxy' : 'not found'}, roster slots: ${currentSlots.length}, with player: ${currentSlots.filter(s => s.player?.providerPlayerId).length}`);
+    return null;
+  } catch (err) {
+    console.error(`[getTeamAvatarUrl] Error getting avatar for team ${teamDbId}:`, err);
+    return null;
+  }
 }
 
 // ---------- ROUTES ----------
@@ -4002,32 +4023,32 @@ app.get("/leagues/:leagueId/standings", async (req, res) => {
   const leagueId = req.params.leagueId;
 
   try {
-    const league = await prisma.league.findUnique({
-      where: { id: leagueId },
-      select: { id: true, name: true },
-    });
+    // Use demo scope
+    const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
+    
+    const league = await getLeagueScoped(leagueId, demoSnapshotId);
     if (!league) return (res as any).status(404).json({ error: "League not found" });
 
-    const teams = await prisma.team.findMany({
-      where: { leagueId },
-      select: { id: true, name: true, meta: true },
-      orderBy: { name: "asc" },
-    });
+    const teams = await getTeamsScoped(leagueId, demoSnapshotId);
 
-    const standings = teams
-      .map((team) => {
-        const meta = (team.meta as any) || {};
-        const standingsData = meta.standings || {};
-        return {
-          teamId: team.id,
-          teamName: team.name,
-          rank: typeof standingsData.rank === "number" ? standingsData.rank : 999,
-          wins: standingsData.wins || 0,
-          losses: standingsData.losses || 0,
-          ties: standingsData.ties || 0,
-        };
-      })
-      .sort((a, b) => a.rank - b.rank);
+    // Get avatar URLs for all teams in parallel
+    const standings = await Promise.all(teams.map(async (team: any) => {
+      const meta = (team.meta as any) || {};
+      const standingsData = meta.standings || {};
+      const avatarUrl = await getTeamAvatarUrl(req, team.id, demoSnapshotId);
+      
+      return {
+        teamId: team.id,
+        teamName: team.name,
+        avatarUrl,
+        rank: typeof standingsData.rank === "number" ? standingsData.rank : 999,
+        wins: standingsData.wins || 0,
+        losses: standingsData.losses || 0,
+        ties: standingsData.ties || 0,
+      };
+    }));
+
+    standings.sort((a, b) => a.rank - b.rank);
 
     return res.json({ league: { id: league.id, name: league.name }, standings });
   } catch (err) {
@@ -4988,25 +5009,36 @@ app.get("/debug/weekly-projections/:leagueId", async (req: express.Request, res:
 
 // Helper: List teams in a league
 app.get("/leagues/:leagueId/teams", async (req: express.Request, res: express.Response) => {
-  const leagueId = (req as any).params.leagueId;
+  try {
+    const leagueId = (req as any).params.leagueId;
+    
+    // Use demo scope
+    const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
 
-  const league = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: { id: true, name: true },
-  });
+    const league = await getLeagueScoped(leagueId, demoSnapshotId);
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
-  if (!league) return (res as any).status(404).json({ error: "League not found" });
+    const teams = await getTeamsScoped(leagueId, demoSnapshotId);
 
-  const teams = await prisma.team.findMany({
-    where: { leagueId },
-    select: { id: true, name: true, providerTeamId: true },
-    orderBy: { name: "asc" },
-  });
+    // Get avatar URLs for all teams in parallel
+    const teamsWithAvatars = await Promise.all(teams.map(async (t: any) => {
+      const avatarUrl = await getTeamAvatarUrl(req, t.id, demoSnapshotId);
+      return {
+        id: t.id,
+        name: t.name,
+        providerTeamId: t.providerTeamId,
+        avatarUrl,
+      };
+    }));
 
-  return (res as any).status(200).json({
-    league: { id: league.id, name: league.name },
-    teams: teams.map((t: any) => ({ id: t.id, name: t.name, providerTeamId: t.providerTeamId })),
-  });
+    return (res as any).status(200).json({
+      league: { id: league.id, name: league.name },
+      teams: teamsWithAvatars,
+    });
+  } catch (err) {
+    console.error("Error fetching teams:", err);
+    return (res as any).status(500).json({ error: "Failed to fetch teams" });
+  }
 });
 
 // List leagues

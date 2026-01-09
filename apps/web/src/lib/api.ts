@@ -43,6 +43,7 @@ export type Team = {
   id: string;
   name: string;
   providerTeamId: string;
+  avatarUrl?: string | null;
 };
 
 export type TeamsResponse = {
