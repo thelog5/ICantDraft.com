@@ -354,7 +354,6 @@ export default function MyTeamAnalysis() {
                 <thead>
                   <tr>
                     <th>Player</th>
-                    <th>Position</th>
                     <th className="stat-col" title="Season per game">PTS</th>
                     <th className="stat-col" title="Season per game">REB</th>
                     <th className="stat-col" title="Season per game">AST</th>
@@ -421,9 +420,6 @@ export default function MyTeamAnalysis() {
                               </div>
                             </div>
                           </div>
-                        </td>
-                        <td className="position-cell">
-                          {player.positions?.length > 0 ? player.positions.join(", ") : "—"}
                         </td>
                         <td className="stat-col">{hasStats && stats ? formatStat(stats.pts, 1) : "—"}</td>
                         <td className="stat-col">{hasStats && stats ? formatStat(stats.reb, 1) : "—"}</td>

@@ -625,6 +625,84 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
       console.warn(`No matchup data found for team ${selectedTeam.id}. Team meta:`, teamMeta);
     }
 
+    // Add live/current matchup score and category results
+    // ESPN provides scoreByStat with actual live category totals
+    let liveMatchupScore = null;
+    let liveCategories: any[] | null = null;
+    
+    // ESPN stat ID to 9-cat key mapping
+    const espnStatIdToKey: Record<number, string> = {
+      0: "pts",    // Points
+      1: "blk",    // Blocks
+      2: "stl",    // Steals
+      3: "ast",    // Assists
+      6: "reb",    // Rebounds
+      11: "tov",   // Turnovers
+      17: "threes", // 3-Pointers Made
+      19: "fgPct", // FG%
+      20: "ftPct", // FT%
+    };
+    
+    if (matchupData) {
+      // Use ESPN's category wins/losses for the live score
+      liveMatchupScore = {
+        teamCatsWon: matchupData.myCatsWon || 0,
+        teamCatsLost: matchupData.myCatsLost || 0,
+        tied: matchupData.myCatsTied || 0,
+        opponentCatsWon: matchupData.oppCatsWon || 0,
+        opponentCatsLost: matchupData.oppCatsLost || 0,
+        opponentTied: matchupData.oppCatsTied || 0,
+      };
+      
+      // Use actual ESPN scoreByStat for live category breakdown
+      const myScoreByStat = matchupData.myScoreByStat || {};
+      const oppScoreByStat = matchupData.oppScoreByStat || {};
+      
+      if (Object.keys(myScoreByStat).length > 0) {
+        // Build live categories from ESPN's actual stats
+        const categoryKeys = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
+        liveCategories = categoryKeys.map(key => {
+          // Find ESPN stat ID for this key
+          const espnStatId = Object.entries(espnStatIdToKey).find(([_, k]) => k === key)?.[0];
+          const myStatData = espnStatId ? myScoreByStat[espnStatId] : null;
+          const oppStatData = espnStatId ? oppScoreByStat[espnStatId] : null;
+          
+          const teamTotal = myStatData?.score ?? 0;
+          const opponentTotal = oppStatData?.score ?? 0;
+          
+          // Determine winner based on ESPN's result field, or calculate it
+          let winner: "TEAM" | "OPPONENT" | "TIE" = "TIE";
+          if (myStatData?.result === "WIN") {
+            winner = "TEAM";
+          } else if (myStatData?.result === "LOSS") {
+            winner = "OPPONENT";
+          } else if (key === "tov") {
+            // Lower is better for turnovers
+            if (teamTotal < opponentTotal) winner = "TEAM";
+            else if (teamTotal > opponentTotal) winner = "OPPONENT";
+          } else {
+            // Higher is better for other stats
+            if (teamTotal > opponentTotal) winner = "TEAM";
+            else if (teamTotal < opponentTotal) winner = "OPPONENT";
+          }
+          
+          return { key, teamTotal, opponentTotal, winner };
+        });
+        
+        console.log(`[Weekly Projections] Live score from ESPN: ${liveMatchupScore.teamCatsWon}-${liveMatchupScore.opponentCatsWon} (${liveMatchupScore.tied} tied)`);
+        console.log(`[Weekly Projections] Live categories:`, liveCategories.map(c => `${c.key}: ${c.teamTotal} vs ${c.opponentTotal} (${c.winner})`).join(', '));
+      } else if (matchupResults && matchupResults.categories) {
+        // Fallback to projections if no ESPN live stats available
+        liveCategories = matchupResults.categories.map(cat => ({
+          key: cat.key,
+          teamTotal: cat.teamTotal,
+          opponentTotal: cat.opponentTotal,
+          winner: cat.winner
+        }));
+        console.log(`[Weekly Projections] Using projected stats (no ESPN live data): ${liveMatchupScore.teamCatsWon}-${liveMatchupScore.opponentCatsWon}`);
+      }
+    }
+
     res.setHeader("Cache-Control", "public, max-age=60");
     return res.json({
       league: {
@@ -642,6 +720,8 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
       team: teamProjection,
       opponent: opponentProjection,
       matchup: matchupResults,
+      liveMatchupScore,
+      liveCategories,
     });
   } catch (err) {
     console.error("Error fetching weekly projections:", err);
@@ -925,26 +1005,26 @@ function playerBoostsCategory(perGame: Record<NineCatKey, number>, cat: NineCatK
   const value = perGame[cat];
   if (typeof value !== 'number') return false;
   
-  // Category-specific thresholds
+  // Lower thresholds for free agents (waiver wire players are less productive)
   switch (cat) {
     case 'pts':
-      return value >= 12.0; // At least 12 PPG
+      return value >= 8.0; // At least 8 PPG
     case 'reb':
-      return value >= 5.0; // At least 5 RPG
+      return value >= 4.0; // At least 4 RPG
     case 'ast':
-      return value >= 3.0; // At least 3 APG
+      return value >= 2.5; // At least 2.5 APG
     case 'stl':
-      return value >= 0.8; // At least 0.8 SPG
+      return value >= 0.6; // At least 0.6 SPG
     case 'blk':
-      return value >= 0.8; // At least 0.8 BPG
+      return value >= 0.5; // At least 0.5 BPG
     case 'threes':
-      return value >= 1.5; // At least 1.5 3PM per game
+      return value >= 1.0; // At least 1 3PM per game
     case 'fgPct':
-      return value >= 0.48; // At least 48% FG
+      return value >= 0.42; // At least 42% FG
     case 'ftPct':
-      return value >= 0.78; // At least 78% FT
+      return value >= 0.70; // At least 70% FT
     case 'tov':
-      return value <= 1.5; // Low turnovers (lower is better)
+      return value <= 2.0; // Low turnovers (lower is better)
     default:
       return false;
   }
@@ -962,7 +1042,7 @@ function rankFreeAgentsForAdds(
     gamesThisWeek: number;
     injuryStatus: string;
   }>,
-  contestedCategories: Array<{ key: NineCatKey; normalizedDelta: number }>,
+  contestedCategories: Array<{ key: NineCatKey; normalizedDelta: number; weight?: number }>,
   targetDate?: Date
 ): Array<{
   player: typeof freeAgents[0];
@@ -979,36 +1059,101 @@ function rankFreeAgentsForAdds(
       
       const perGame = player.stats.perGame;
       
-      // Calculate score based on contested categories
-      let contestedScore = 0;
+      // Calculate score based on contested categories - PRIORITIZE FOCUS CATEGORIES
+      let focusScore = 0;
       const boosts: NineCatKey[] = [];
       
+      // Lower thresholds for free agents (waiver wire players are less productive)
+      const thresholds: Record<NineCatKey, number> = {
+        pts: 8, reb: 4, ast: 2.5, stl: 0.6, blk: 0.5, threes: 1.0, fgPct: 0.42, ftPct: 0.70, tov: 2.0
+      };
+      
       for (const cat of contestedCategories) {
-        if (playerBoostsCategory(perGame, cat.key)) {
-          // Weight by how contested the category is (smaller normalizedDelta = more important)
-          const weight = 1 / (cat.normalizedDelta + 0.01);
-          const contribution = perGame[cat.key];
-          contestedScore += Math.abs(contribution) * weight;
-          boosts.push(cat.key);
+        const key = cat.key;
+        const isPct = key === "fgPct" || key === "ftPct";
+        const isTov = key === "tov";
+        
+        // Get category weight (closer categories = higher weight)
+        // Default weight is based on normalized delta (smaller = more important)
+        const catWeight = cat.weight ?? (1 / (cat.normalizedDelta + 0.05));
+        
+        if (isPct) {
+          // For percentages: small positive contribution if above threshold, negative if below
+          const threshold = thresholds[key];
+          if (perGame[key] >= threshold) {
+            // Good percentage player - small bonus
+            focusScore += catWeight * 2;
+            boosts.push(key);
+          } else if (perGame[key] < threshold - 0.05) {
+            // Bad percentage player - penalty (but reduced)
+            focusScore -= catWeight * 1;
+          }
+        } else if (!isTov) {
+          // For counting stats: weight by per-game average contribution
+          const contribution = perGame[key];
+          if (contribution >= thresholds[key]) {
+            // Above threshold = full weight
+            focusScore += contribution * catWeight;
+            boosts.push(key);
+          } else if (contribution >= thresholds[key] * 0.5) {
+            // Partial contribution
+            focusScore += contribution * catWeight * 0.5;
+          }
+        }
+        // Don't consider TOV for streaming focus - can't stream for fewer turnovers
+      }
+
+      // FG%/FT% guardrails - penalize players who "tank" percentages
+      let pctPenalty = 0;
+      const FGM_THRESHOLD = 3; // Significant shooting volume
+      const FTM_THRESHOLD = 1.5;
+      
+      // Estimate FGM/FGA from typical relationships
+      const estimatedFGA = perGame.pts * 0.7 - perGame.threes * 0.7 - (perGame.ftPct > 0 ? 2 : 0);
+      const estimatedFGM = estimatedFGA * perGame.fgPct;
+      
+      if (estimatedFGM > FGM_THRESHOLD) {
+        // Meaningful shooting volume
+        if (perGame.fgPct < 0.40) {
+          // Tank FG% warning - significant penalty
+          pctPenalty += 15;
+        } else if (perGame.fgPct < 0.42) {
+          // Moderate FG% concern
+          pctPenalty += 8;
+        }
+      }
+      
+      // Estimate FTM from FT%
+      const estimatedFTA = perGame.pts * 0.15;
+      const estimatedFTM = estimatedFTA * perGame.ftPct;
+      
+      if (estimatedFTM > FTM_THRESHOLD) {
+        // Meaningful FT volume
+        if (perGame.ftPct < 0.65) {
+          // Tank FT% warning - significant penalty
+          pctPenalty += 12;
+        } else if (perGame.ftPct < 0.70) {
+          // Moderate FT% concern
+          pctPenalty += 6;
         }
       }
 
-      // Calculate overall value score
+      // Calculate overall value score (secondary consideration)
       const valueScore =
-        perGame.pts * 1.0 +
-        perGame.reb * 1.2 +
-        perGame.ast * 1.5 +
-        perGame.stl * 3.0 +
-        perGame.blk * 3.0 +
-        perGame.threes * 2.0 +
-        (perGame.fgPct > 0.45 ? 5 : 0) +
-        (perGame.ftPct > 0.75 ? 3 : 0) -
-        perGame.tov * 1.5;
+        perGame.pts * 0.8 +
+        perGame.reb * 1.0 +
+        perGame.ast * 1.2 +
+        perGame.stl * 2.5 +
+        perGame.blk * 2.5 +
+        perGame.threes * 1.5 +
+        (perGame.fgPct > 0.45 ? 3 : 0) +
+        (perGame.ftPct > 0.75 ? 2 : 0) -
+        perGame.tov * 1.0;
 
       // Identify strengths (top 3 categories)
       const catValues: Array<{ key: NineCatKey; value: number }> = [
         { key: "pts", value: perGame.pts },
-        { key: "reb", value: perGame.reb * 2 }, // Weight rebounds higher
+        { key: "reb", value: perGame.reb * 2 },
         { key: "ast", value: perGame.ast * 2.5 },
         { key: "stl", value: perGame.stl * 5 },
         { key: "blk", value: perGame.blk * 5 },
@@ -1023,10 +1168,10 @@ function rankFreeAgentsForAdds(
       if (perGame.fgPct < 0.42) weaknesses.push("fgPct");
       if (perGame.ftPct < 0.70) weaknesses.push("ftPct");
 
-      // Combined score: 60% contested categories + 40% overall value
-      const finalScore = contestedScore * 0.6 + valueScore * 0.4;
+      // Combined score: 70% focus categories + 30% overall value - percentage penalties
+      const finalScore = (focusScore * 0.7 + valueScore * 0.3) - pctPenalty;
 
-      // Fit score (0-100) based on how many contested cats they help
+      // Fit score (0-100) based on how many focus cats they help
       const fitScore = Math.min(100, (boosts.length / Math.max(1, contestedCategories.length)) * 100);
 
       // Generate reason
@@ -1035,6 +1180,11 @@ function rankFreeAgentsForAdds(
         reason = `Boosts ${boosts.slice(0, 2).join(", ")}`;
       } else {
         reason = `Volume streamer (${player.gamesThisWeek}g)`;
+      }
+      
+      // Add percentage warning if applicable
+      if (pctPenalty >= 12) {
+        reason += " ⚠️ FG%/FT% risk";
       }
 
       return {
@@ -1066,16 +1216,18 @@ function rankRosterForDrops(
     schedule: Date[];
     gamesRemaining: number;
     isCore?: boolean;
+    rosterPct?: number | null;
   }>,
   leagueDist: ReturnType<typeof computeLeagueDistributions>,
   currentDate: Date
 ): Array<{
   player: typeof roster[0];
-  dropScore: number; // Lower = better drop candidate
+  dropScore: number; // Lower = better drop candidate (lower roster%)
   playerValue: number; // Overall PTV value
   reason: string;
   riskLevel: "low" | "medium" | "high";
   nextGameDate: string | null;
+  rosterPct: number | null;
 }> {
   const ranked = roster
     .map((player) => {
@@ -1083,51 +1235,55 @@ function rankRosterForDrops(
       if (player.isCore) return null; // Never drop core players
 
       const perGame = player.stats.perGame;
+      const rosterPct = player.rosterPct ?? null;
 
-      // Calculate weighted stat total (simpler than z-scores)
-      // Weights based on fantasy value
+      // Calculate player value for fallback sorting
       const playerValue =
-        perGame.pts * 1.0 +     // Points: 1x weight
-        perGame.reb * 1.2 +     // Rebounds: 1.2x weight
-        perGame.ast * 1.5 +     // Assists: 1.5x weight
-        perGame.stl * 3.5 +     // Steals: 3.5x weight (scarce)
-        perGame.blk * 3.5 +     // Blocks: 3.5x weight (scarce)
-        perGame.threes * 2.0 +  // 3PM: 2x weight
-        (perGame.fgPct * 100) + // FG%: normalized to 0-100 range
-        (perGame.ftPct * 100) - // FT%: normalized to 0-100 range
-        (perGame.tov * 2.0);    // Turnovers: -2x weight (penalty)
+        perGame.pts * 1.0 +
+        perGame.reb * 1.2 +
+        perGame.ast * 1.5 +
+        perGame.stl * 3.5 +
+        perGame.blk * 3.5 +
+        perGame.threes * 2.0 +
+        (perGame.fgPct * 100) +
+        (perGame.ftPct * 100) -
+        (perGame.tov * 2.0);
 
       // Check if player plays soon
       const upcomingGames = player.schedule.filter((d) => d >= currentDate);
       const nextGameDate = upcomingGames.length > 0 ? upcomingGames[0].toISOString().split('T')[0] : null;
-      const daysUntilNextGame = upcomingGames.length > 0 
-        ? Math.floor((upcomingGames[0].getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24))
-        : 999;
 
-      // Drop score: Simply use negative player value
-      // Lower dropScore = better drop candidate (lower value players)
-      let dropScore = -playerValue;
-      
-      // Slight adjustment for schedule (but keep it simple)
-      if (player.gamesRemaining === 0) {
-        dropScore -= 20; // Much easier to drop if no games left
-      } else if (daysUntilNextGame > 4) {
-        dropScore -= 5; // Easier to drop if not playing soon
+      // Drop score: PRIMARY = roster% (lower is better drop candidate)
+      // For players without roster%, use very high score to place at end
+      let dropScore: number;
+      if (rosterPct !== null) {
+        // Use roster% directly as drop score (0-100 range, lower = better drop)
+        dropScore = rosterPct;
+        
+        // Small bonus if no games remaining (makes them slightly better to drop)
+        if (player.gamesRemaining === 0) {
+          dropScore -= 5;
+        }
+      } else {
+        // No roster% data: use player value as fallback, placing at end
+        // Start at 1000 to ensure they sort after players with roster%
+        dropScore = 1000 - playerValue;
       }
 
-      // Generate reason based on VALUE
+      // Generate reason based on ROSTER%
       let reason = "";
-      const valuePerGame = playerValue.toFixed(1);
-      if (player.gamesRemaining === 0) {
-        reason = "No games remaining this week";
-      } else if (playerValue < 30) {
-        reason = `Lowest value on roster (${valuePerGame} pts/game value)`;
-      } else if (playerValue < 50) {
-        reason = `Below-average production (${valuePerGame})`;
-      } else if (playerValue < 70) {
-        reason = `Modest production (${valuePerGame})`;
+      if (rosterPct === null) {
+        reason = player.gamesRemaining === 0 
+          ? "No games remaining (unknown roster %)"
+          : "Replacement-level player";
+      } else if (rosterPct <= 20) {
+        reason = `${rosterPct.toFixed(0)}% rostered — rarely owned`;
+      } else if (rosterPct <= 40) {
+        reason = `${rosterPct.toFixed(0)}% rostered — low ownership`;
+      } else if (rosterPct <= 60) {
+        reason = `${rosterPct.toFixed(0)}% rostered — moderate ownership`;
       } else {
-        reason = `Limited upside (${valuePerGame})`;
+        reason = `${rosterPct.toFixed(0)}% rostered — widely owned`;
       }
 
       // Deprecated risk level (keeping for backward compatibility)
@@ -1140,16 +1296,27 @@ function rankRosterForDrops(
         reason,
         riskLevel,
         nextGameDate,
+        rosterPct,
       };
     })
     .filter((r) => r !== null);
 
-  // Sort by dropScore ascending (lower = better drop candidate)
+  // Sort by dropScore ascending (lower roster% = better drop candidate)
   ranked.sort((a, b) => a.dropScore - b.dropScore);
 
-  // Exclude top 3 players by value as guardrail
-  const sortedByValue = [...ranked].sort((a, b) => b.playerValue - a.playerValue);
-  const top3Ids = new Set(sortedByValue.slice(0, 3).map(r => r.player.playerId));
+  // Exclude top 3 players by roster% (or value if no roster%) as guardrail
+  const sortedByOwnership = [...ranked].sort((a, b) => {
+    if (a.rosterPct !== null && b.rosterPct !== null) {
+      return b.rosterPct - a.rosterPct; // Higher roster% = more owned
+    } else if (a.rosterPct !== null) {
+      return -1; // a has roster%, prioritize
+    } else if (b.rosterPct !== null) {
+      return 1; // b has roster%, prioritize
+    } else {
+      return b.playerValue - a.playerValue; // Fallback to value
+    }
+  });
+  const top3Ids = new Set(sortedByOwnership.slice(0, 3).map(r => r.player.playerId));
   
   return ranked.filter(r => !top3Ids.has(r.player.playerId));
 }
@@ -1366,16 +1533,30 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
       }
     }
 
-    // Determine contested categories
+    // Determine contested categories (projected)
+    const categoryLabels: Record<NineCatKey, string> = {
+      pts: "PTS", reb: "REB", ast: "AST", stl: "STL", blk: "BLK",
+      threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
+    };
+    const categoryKeys: NineCatKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
+    
+    type ContestedCategory = {
+      key: NineCatKey;
+      label: string;
+      myValue: number;
+      oppValue: number;
+      absDelta: number;
+      normalizedDelta: number;
+      source: "Projected" | "Live" | "Equal";
+      isFavored: boolean;
+    };
+    
+    const projectedContested: ContestedCategory[] = [];
+    const liveContested: ContestedCategory[] = [];
+    let finalStreamingFocus: ContestedCategory[] = [];
     const contestedCategories: NineCatKey[] = [];
+    
     if (oppProjection) {
-      const categoryLabels: Record<NineCatKey, string> = {
-        pts: "PTS", reb: "REB", ast: "AST", stl: "STL", blk: "BLK",
-        threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
-      };
-
-      const categoryKeys: NineCatKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
-      
       const myTotals = myProjection.totals;
       const oppTotals = oppProjection.totals;
       
@@ -1391,19 +1572,80 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
         tov: Math.max(myTotals.tov, oppTotals.tov, 30),
       };
 
-      const deltas = categoryKeys.map((key) => ({
-        key,
-        label: categoryLabels[key],
-        absDelta: Math.abs(myTotals[key] - oppTotals[key]),
-        normalizedDelta: Math.abs(myTotals[key] - oppTotals[key]) / maxValues[key],
-      }));
-
-      deltas.sort((a, b) => a.normalizedDelta - b.normalizedDelta);
-      const topContested = deltas.slice(0, 4);
-      contestedCategories.push(...topContested.map((d) => d.key));
+      // Compute projected contested categories
+      for (const key of categoryKeys) {
+        const myValue = myTotals[key];
+        const oppValue = oppTotals[key];
+        const isPct = key === "fgPct" || key === "ftPct";
+        const isTov = key === "tov";
+        
+        let absDelta: number;
+        if (isPct) {
+          // For percentages: convert to percentage points
+          absDelta = Math.abs(myValue - oppValue) * 100;
+        } else {
+          absDelta = Math.abs(myValue - oppValue);
+        }
+        
+        const normalizedDelta = absDelta / (isPct ? 100 : maxValues[key]);
+        const isFavored = isTov ? myValue < oppValue : myValue > oppValue;
+        
+        projectedContested.push({
+          key,
+          label: categoryLabels[key],
+          myValue,
+          oppValue,
+          absDelta,
+          normalizedDelta,
+          source: "Projected",
+          isFavored,
+        });
+      }
+      
+      // Sort projected by normalized delta (smallest = most contested)
+      projectedContested.sort((a, b) => a.normalizedDelta - b.normalizedDelta);
+      
+      // TODO: If we have live data in the future, compute liveContested similarly
+      // For now, use projected as the live data (same as weekly projections fallback)
+      for (const cat of projectedContested) {
+        liveContested.push({ ...cat, source: "Live" as const });
+      }
+      
+      // Compute Final Streaming Focus by combining projected and live
+      // Exclude turnovers (can't stream for fewer TOs)
+      const streamableKeys = categoryKeys.filter(k => k !== "tov");
+      
+      const combined = streamableKeys.map((key) => {
+        const projectedCat = projectedContested.find(c => c.key === key)!;
+        const liveCat = liveContested.find(c => c.key === key);
+        
+        const projectedDelta = projectedCat.normalizedDelta;
+        const liveDelta = liveCat?.normalizedDelta || projectedDelta;
+        
+        const smallerDelta = Math.min(projectedDelta, liveDelta);
+        const source: "Projected" | "Live" | "Equal" = 
+          projectedDelta < liveDelta ? "Projected" : 
+          projectedDelta > liveDelta ? "Live" : 
+          "Equal";
+        
+        // Use the source with smaller delta
+        const cat = source === "Live" && liveCat ? liveCat : projectedCat;
+        return { 
+          ...cat, 
+          normalizedDelta: smallerDelta,
+          source 
+        };
+      });
+      
+      // Sort by priority delta (smallest = most contested)
+      combined.sort((a, b) => a.normalizedDelta - b.normalizedDelta);
+      finalStreamingFocus = combined.slice(0, 4);
+      
+      // Extract top 4 keys for backward compatibility
+      contestedCategories.push(...finalStreamingFocus.map(c => c.key));
     }
 
-    console.log(`[Streaming Overview] Contested categories:`, contestedCategories);
+    console.log(`[Streaming Overview] Final Streaming Focus:`, finalStreamingFocus.map(c => c.label).join(', '));
 
     // Get ALL free agents (not rostered by anyone)
     const activeRosterSlots = await prisma.rosterSlot.findMany({
@@ -1559,9 +1801,11 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
 
     // Rank free agents and roster for recommendations
     const currentDate = new Date();
-    const contestedCategoriesForRanking = contestedCategories.map((key) => ({
-      key,
-      normalizedDelta: matchupSnapshot?.categories.find((c) => c.key === key)?.marginPct || 0.1,
+    // Use Final Streaming Focus categories with proper weights (smaller delta = higher weight)
+    const contestedCategoriesForRanking = finalStreamingFocus.map((cat) => ({
+      key: cat.key,
+      normalizedDelta: cat.normalizedDelta,
+      weight: 1 / (cat.normalizedDelta + 0.02), // Smaller delta = higher weight
     }));
 
     const freeAgentsForRanking = freeAgents.map((p) => {
@@ -1583,6 +1827,12 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
     const rosterForRanking = team.rosterSlots.map((slot) => {
       const stats = extractNineCatFromPlayerMeta(slot.player.meta as any, league.seasonYear);
       const schedule = extractPlayerSchedule(slot.player.meta as any, scoringPeriodStartDate, scoringPeriodEndDate, nbaSchedules);
+      
+      // Extract roster percentage from ESPN player meta (if available)
+      const playerMeta = (slot.player.meta as any) || {};
+      const ownership = playerMeta.ownership || {};
+      const rosterPct = typeof ownership.percentOwned === "number" ? ownership.percentOwned : null;
+      
       return {
         playerId: slot.player.id,
         name: slot.player.fullName,
@@ -1590,6 +1840,7 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
         schedule,
         gamesRemaining: schedule.length,
         isCore: false, // TODO: integrate with core player detection
+        rosterPct,
       };
     }).filter((p) => p.stats.hasStats);
 
@@ -1757,6 +2008,7 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
       nextGameDate: r.nextGameDate,
       reason: r.reason,
       riskLevel: r.riskLevel,
+      rosterPct: r.rosterPct,
       perGame: r.player.stats.perGame,
     }));
 
@@ -1777,6 +2029,16 @@ app.get("/leagues/:leagueId/streaming/overview", async (req, res) => {
         contestedCats: contestedCategories,
         recommendedCats: contestedCategories,
       },
+      // Final Streaming Focus - computed from projected + live data
+      finalStreamingFocus: finalStreamingFocus.map((cat) => ({
+        key: cat.key,
+        label: cat.label,
+        myValue: cat.myValue,
+        oppValue: cat.oppValue,
+        absDelta: Number(cat.absDelta.toFixed(2)),
+        source: cat.source,
+        isFavored: cat.isFavored,
+      })),
       dailyRecommendations,
       freeAgents: enhancedFreeAgents,
       dropCandidates,
@@ -3879,6 +4141,7 @@ app.post("/ingest/espn", async (_req, res) => {
   url.searchParams.append("view", "mStandings");
   url.searchParams.append("view", "mMatchupScore");
   url.searchParams.append("view", "mLiveScoring");
+  url.searchParams.append("view", "mBoxscore"); // Required for scoreByStat live category data
   url.searchParams.append("view", "mStatus");
   url.searchParams.set("platformVersion", platformVersion);
 
@@ -3933,6 +4196,21 @@ app.post("/ingest/espn", async (_req, res) => {
   const currentMatchupPeriod =
     typeof data?.status?.currentMatchupPeriod === "number" ? data.status.currentMatchupPeriod : null;
 
+  // Extract scoring period dates from current matchup
+  let scoringPeriodStartDate: string | null = null;
+  let scoringPeriodEndDate: string | null = null;
+  
+  if (currentMatchupPeriod !== null) {
+    const currentMatchup = schedule.find((m) => m?.matchupPeriodId === currentMatchupPeriod);
+    if (currentMatchup) {
+      // ESPN provides matchupPeriodStartDate and matchupPeriodEndDate in ISO format
+      scoringPeriodStartDate = currentMatchup.matchupPeriodStartDate || null;
+      scoringPeriodEndDate = currentMatchup.matchupPeriodEndDate || null;
+      
+      console.log(`[Ingestion] Current matchup period ${currentMatchupPeriod}: ${scoringPeriodStartDate} to ${scoringPeriodEndDate}`);
+    }
+  }
+
   const matchupMap = new Map<string, any>();
 
   for (const matchup of schedule) {
@@ -3945,6 +4223,17 @@ app.post("/ingest/espn", async (_req, res) => {
       const homeCumScore = matchup.home.cumulativeScore || {};
       const awayCumScore = matchup.away?.cumulativeScore || {};
 
+      // Extract live category stats from scoreByStat
+      // ESPN stat IDs: 0=PTS, 1=BLK, 2=STL, 3=AST, 6=REB, 11=TO, 17=3PM, 19=FG%, 20=FT%
+      const homeScoreByStat = homeCumScore.scoreByStat || {};
+      const awayScoreByStat = awayCumScore.scoreByStat || {};
+
+      // Debug: Log scoreByStat extraction
+      console.log(`[Ingestion] Team ${homeId} scoreByStat keys:`, Object.keys(homeScoreByStat));
+      if (Object.keys(homeScoreByStat).length > 0) {
+        console.log(`[Ingestion] Team ${homeId} PTS (0):`, homeScoreByStat["0"]?.score, `REB (6):`, homeScoreByStat["6"]?.score);
+      }
+
       matchupMap.set(homeId, {
         opponentTeamId: awayId,
         myCatsWon: homeCumScore.wins || 0,
@@ -3954,12 +4243,19 @@ app.post("/ingest/espn", async (_req, res) => {
         oppCatsLost: awayCumScore.losses || 0,
         oppCatsTied: awayCumScore.ties || 0,
         isHome: true,
+        // Live category stats from ESPN
+        myScoreByStat: homeScoreByStat,
+        oppScoreByStat: awayScoreByStat,
       });
     }
 
     if (awayId && matchup?.away) {
       const homeCumScore = matchup.home?.cumulativeScore || {};
       const awayCumScore = matchup.away.cumulativeScore || {};
+
+      // Extract live category stats from scoreByStat
+      const homeScoreByStat = homeCumScore.scoreByStat || {};
+      const awayScoreByStat = awayCumScore.scoreByStat || {};
 
       matchupMap.set(awayId, {
         opponentTeamId: homeId,
@@ -3970,6 +4266,9 @@ app.post("/ingest/espn", async (_req, res) => {
         oppCatsLost: homeCumScore.losses || 0,
         oppCatsTied: homeCumScore.ties || 0,
         isHome: false,
+        // Live category stats from ESPN
+        myScoreByStat: awayScoreByStat,
+        oppScoreByStat: homeScoreByStat,
       });
     }
   }
@@ -4018,6 +4317,8 @@ app.post("/ingest/espn", async (_req, res) => {
       matchup: matchupData,
       logo: normalizeEspnUrl(teamLogo),
       logoUrl: normalizeEspnUrl(t?.logoUrl ?? null),
+      scoringPeriodStartDate,
+      scoringPeriodEndDate,
     };
 
     const team = await prisma.team.upsert({
