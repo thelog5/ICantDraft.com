@@ -64,20 +64,19 @@ console.log("ENV LOADED", {
 });
 
 // ---------- APP ----------
-const app = express();
+export const app = express();
 console.log("SERVER BUILD ID:", Date.now());
 
 app.use(express.json());
 app.use(cookieParser());
 
 app.use((req, res, next) => {
-  // Allow CORS from frontend - use env var in production
-  const allowedOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
-  res.header("Access-Control-Allow-Origin", allowedOrigin);
-  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  const webOrigin = process.env.WEB_ORIGIN || process.env.CORS_ORIGIN || "http://localhost:5173";
+  res.header("Access-Control-Allow-Origin", webOrigin);
   res.header("Access-Control-Allow-Credentials", "true");
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 
@@ -5926,14 +5925,10 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
 });
 
 
-// ---------- START ----------
-// Export for Vercel serverless functions - MUST be at the end
-export default app;
-
-// Start server for local development only
-if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production' && process.env.VERCEL !== '1') {
-  const port = Number(process.env.PORT ?? 3000);
-  app.listen(port, () => {
-    console.log(`api listening on :${port}`);
-  });
-}
+// ---------- START (Local Dev Only) ----------
+// For Vercel, use api/index.ts with serverless-http
+// This file is only used for local development
+const port = Number(process.env.PORT ?? 3000);
+app.listen(port, () => {
+  console.log(`api listening on :${port}`);
+});
