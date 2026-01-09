@@ -46,23 +46,38 @@ export async function getLeagueScoped(
   leagueId: string,
   demoSnapshotId: string | null
 ): Promise<any | null> {
-  const where: any = { id: leagueId };
-  
-  // If in demo mode, restrict to demo snapshot
-  if (demoSnapshotId) {
-    where.demoSnapshotId = demoSnapshotId;
-  } else {
-    // In live mode, only allow non-demo leagues
-    where.demoSnapshotId = null;
-  }
-  
-  return getPrisma().league.findUnique({
-    where,
+  // First try to find by ID only (works for both demo and non-demo)
+  let league = await getPrisma().league.findUnique({
+    where: { id: leagueId },
     include: {
       teams: true,
       players: true,
     },
   });
+  
+  if (!league) {
+    return null;
+  }
+  
+  // If we have a demoSnapshotId, verify the league belongs to it
+  if (demoSnapshotId && league.demoSnapshotId !== demoSnapshotId) {
+    return null; // League doesn't belong to this demo snapshot
+  }
+  
+  // If we don't have a demoSnapshotId but the league is a demo league, allow it
+  // (This handles the case where cookie isn't set but user is accessing demo data)
+  // OR if league is not a demo league and we're not in demo mode, allow it
+  if (!demoSnapshotId && league.demoSnapshotId) {
+    // Allow access to demo league even without cookie (for initial demo access)
+    return league;
+  }
+  
+  if (demoSnapshotId && !league.demoSnapshotId) {
+    // In demo mode, don't allow non-demo leagues
+    return null;
+  }
+  
+  return league;
 }
 
 /**
