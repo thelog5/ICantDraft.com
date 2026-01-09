@@ -37,7 +37,6 @@ export default function Streaming() {
   const [selectedDropPlayerId, setSelectedDropPlayerId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [impactData, setImpactData] = useState<any | null>(null);
-  const [impactLoading, setImpactLoading] = useState(false);
   const [showOnlyPlayingToday, setShowOnlyPlayingToday] = useState(false);
   const [focusCategories, setFocusCategories] = useState<FocusCategory[]>([]);
 
@@ -204,7 +203,6 @@ export default function Streaming() {
     }
 
     const fetchImpact = async () => {
-      setImpactLoading(true);
       try {
         const teamMeta = (ctx as any).teamMeta || {};
         const opponentTeamId = teamMeta.currentOpponentId;
@@ -220,8 +218,6 @@ export default function Streaming() {
       } catch (err) {
         console.error("Failed to calculate impact:", err);
         setImpactData(null);
-      } finally {
-        setImpactLoading(false);
       }
     };
 
