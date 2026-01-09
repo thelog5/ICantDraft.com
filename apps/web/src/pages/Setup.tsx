@@ -139,14 +139,41 @@ export default function Setup() {
       }
 
       // Otherwise, fetch from API
-      const response = await fetch(`${API_BASE}/auth/demo/info`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      let response: Response;
+      let data: any;
+      
+      try {
+        response = await fetch(`${API_BASE}/auth/demo/info`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include', // Include cookies for CORS
+        });
 
-      const data = await response.json();
+        if (!response.ok) {
+          const errorText = await response.text();
+          try {
+            data = JSON.parse(errorText);
+          } catch {
+            data = { message: errorText || `HTTP ${response.status}` };
+          }
+          setError(data.message || `Demo mode not available (${response.status})`);
+          setLoading(false);
+          return;
+        }
 
-      if (!response.ok || !data.success) {
+        data = await response.json();
+      } catch (err: any) {
+        console.error('Demo fetch error:', err);
+        setError(
+          err.message?.includes('fetch') 
+            ? `Failed to connect to API at ${API_BASE}. Check your VITE_API_BASE_URL environment variable.`
+            : err.message || 'Failed to start demo mode. Please check your API configuration.'
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (!data.success) {
         setError(data.message || 'Demo mode not available');
         setLoading(false);
         return;
