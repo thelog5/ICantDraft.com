@@ -206,49 +206,8 @@ async function getTeamAvatarUrl(req: express.Request, teamDbId: string, demoSnap
       return null;
     }
 
-    const meta = (team.meta as any) || {};
-
-    // ESPN logo fields vary a lot; try them all
-    const logo =
-      meta.logo ||
-      meta.logoUrl ||
-      meta.teamLogo ||
-      meta?.logos?.[0]?.href ||
-      meta?.logos?.[0]?.url ||
-      meta?.logoUrls?.[0] ||
-      null;
-
-    // 1) Always prefer the team logo if ESPN provides it
-    // BUT: Skip mystique URLs if we don't have credentials (they'll 401 and return green transparent PNG)
-    // Go straight to player headshot for mystique URLs without credentials
-    if (logo) {
-      try {
-        const logoUrl = new URL(logo);
-        const isMystique = logoUrl.hostname.includes('mystique');
-        const hasCredentials = !!(process.env.ESPN_S2 && process.env.ESPN_SWID);
-        
-        // Skip mystique URLs without credentials - they'll just return green transparent PNG
-        if (isMystique && !hasCredentials) {
-          console.log(`[getTeamAvatarUrl] Skipping mystique logo (no credentials) for team ${teamDbId}, using player headshot fallback`);
-          // Fall through to player headshot
-        } else {
-          // Try CDN logos or mystique URLs with credentials
-          const proxiedLogo = proxiedImage(req, logo);
-          if (proxiedLogo) {
-            console.log(`[getTeamAvatarUrl] Using team logo for team ${teamDbId}: ${logo}`);
-            return proxiedLogo;
-          }
-        }
-      } catch (urlErr) {
-        // If logo is not a valid URL, try proxying it anyway (might be a relative path)
-        const proxiedLogo = proxiedImage(req, logo);
-        if (proxiedLogo) {
-          return proxiedLogo;
-        }
-      }
-    }
-
-    // 2) Fallback: first roster player's headshot (use demo scoped roster slots)
+    // FIRST: Get league and roster slots (needed for player headshot fallback)
+    // This matches how working teams (Free Hospital Beds, Kelvin Killers, etc.) work
     const league = await prisma.league.findFirst({
       where: { teams: { some: { id: teamDbId } } },
       select: { id: true, demoSnapshotId: true },
@@ -263,9 +222,9 @@ async function getTeamAvatarUrl(req: express.Request, teamDbId: string, demoSnap
     const rosterSlots = await getRosterSlotsScoped(league.id, teamDbId, demoSnapshotId);
     const currentSlots = rosterSlots.filter(slot => slot.endAt === null);
     
-    // Find first slot with a player that has a providerPlayerId
+    // Find first slot with a player that has a providerPlayerId (ALWAYS use player headshot as primary)
+    // This is what makes Free Hospital Beds, Kelvin Killers, Joshua's Scary Team work
     const firstRoster = currentSlots.find(slot => slot.player?.providerPlayerId);
-
     const pid = firstRoster?.player?.providerPlayerId;
     if (pid) {
       const cleanPlayerId = cleanProviderPlayerId(pid);
@@ -273,13 +232,49 @@ async function getTeamAvatarUrl(req: express.Request, teamDbId: string, demoSnap
         const headshot = `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`;
         const proxiedHeadshot = proxiedImage(req, headshot);
         if (proxiedHeadshot) {
-          console.log(`[getTeamAvatarUrl] Using player headshot fallback for team ${teamDbId}: ${cleanPlayerId}`);
+          console.log(`[getTeamAvatarUrl] Using player headshot for team ${teamDbId} (${team.name}): ${cleanPlayerId}`);
           return proxiedHeadshot;
         }
       }
     }
 
-    console.warn(`[getTeamAvatarUrl] No avatar found for team ${teamDbId} (${team.name}), logo: ${logo ? 'found but failed to proxy' : 'not found'}, roster slots: ${currentSlots.length}, with player: ${currentSlots.filter(s => s.player?.providerPlayerId).length}`);
+    // SECOND: Try team logo ONLY if it's a CDN URL (not mystique) and we have credentials
+    // Skip mystique URLs entirely - they'll just return green transparent PNG
+    const meta = (team.meta as any) || {};
+    const logo =
+      meta.logo ||
+      meta.logoUrl ||
+      meta.teamLogo ||
+      meta?.logos?.[0]?.href ||
+      meta?.logos?.[0]?.url ||
+      meta?.logoUrls?.[0] ||
+      null;
+
+    if (logo) {
+      try {
+        const logoUrl = new URL(logo);
+        const isMystique = logoUrl.hostname.includes('mystique');
+        const hasCredentials = !!(process.env.ESPN_S2 && process.env.ESPN_SWID);
+        const isCDN = logoUrl.hostname.includes('espncdn.com') || logoUrl.hostname.includes('cdn.espn.com');
+        
+        // Only try CDN logos, or mystique URLs if we have credentials
+        if ((isCDN || (isMystique && hasCredentials))) {
+          const proxiedLogo = proxiedImage(req, logo);
+          if (proxiedLogo) {
+            console.log(`[getTeamAvatarUrl] Using team logo for team ${teamDbId} (${team.name}): ${logo}`);
+            return proxiedLogo;
+          }
+        } else {
+          console.log(`[getTeamAvatarUrl] Skipping ${isMystique ? 'mystique' : 'non-CDN'} logo for team ${teamDbId} (${team.name}), already using player headshot`);
+        }
+      } catch (urlErr) {
+        // If logo is not a valid URL, skip it
+        console.log(`[getTeamAvatarUrl] Invalid logo URL for team ${teamDbId} (${team.name}), using player headshot`);
+      }
+    }
+
+    // If we got here, we already tried player headshot above, so return null
+    console.warn(`[getTeamAvatarUrl] No avatar found for team ${teamDbId} (${team.name}), logo: ${logo ? 'found but skipped' : 'not found'}, roster slots: ${currentSlots.length}, with player: ${currentSlots.filter(s => s.player?.providerPlayerId).length}`);
     return null;
   } catch (err) {
     console.error(`[getTeamAvatarUrl] Error getting avatar for team ${teamDbId}:`, err);
