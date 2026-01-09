@@ -7,7 +7,6 @@ import ErrorState from "../components/ErrorState";
 import "./Streaming.css";
 
 type StreamingOverview = Awaited<ReturnType<typeof api.getStreamingOverview>>;
-type FreeAgent = StreamingOverview['freeAgents'][0];
 
 const STAT_KEYS = ['pts', 'reb', 'ast', 'stl', 'blk', 'threes', 'fgPct', 'ftPct', 'tov'] as const;
 const STAT_LABELS: Record<string, string> = {
@@ -36,11 +35,9 @@ export default function Streaming() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedDropPlayerId, setSelectedDropPlayerId] = useState<string | null>(null);
-  const [expandedRecId, setExpandedRecId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [impactData, setImpactData] = useState<any | null>(null);
   const [impactLoading, setImpactLoading] = useState(false);
-  const [isScheduleExpanded, setIsScheduleExpanded] = useState(false);
   const [showOnlyPlayingToday, setShowOnlyPlayingToday] = useState(false);
   const [focusCategories, setFocusCategories] = useState<FocusCategory[]>([]);
 
@@ -231,13 +228,6 @@ export default function Streaming() {
     fetchImpact();
   }, [ctx, overview, selectedPlayerId, selectedDropPlayerId]);
 
-  const formatStat = (value: number, key: string): string => {
-    if (key === 'fgPct' || key === 'ftPct') {
-      return `${(value * 100).toFixed(1)}%`;
-    }
-    return value.toFixed(1);
-  };
-
   const formatStatShort = (value: number, key: string): string => {
     if (key === 'fgPct' || key === 'ftPct') {
       return `${(value * 100).toFixed(0)}%`;
@@ -249,8 +239,8 @@ export default function Streaming() {
     return (
       <TopNav>
         <div className="streaming-v2">
-          <Skeleton height={40} width={300} />
-          <Skeleton height={200} style={{ marginTop: "1rem" }} />
+          <Skeleton height="40px" width="300px" />
+          <Skeleton height="200px" style={{ marginTop: "1rem" }} />
         </div>
       </TopNav>
     );
@@ -269,13 +259,11 @@ export default function Streaming() {
 
   const { meta, targets, dailyRecommendations, freeAgents, matchupSnapshot, dropCandidates } = overview;
   const selectedPlayer = selectedPlayerId ? freeAgents.find(fa => fa.playerId === selectedPlayerId) : null;
-  const selectedDrop = selectedDropPlayerId ? overview.roster.find(r => r.playerId === selectedDropPlayerId) : null;
   
   // Get recommendations for selected date
   const selectedDayData = selectedDate 
     ? dailyRecommendations?.find(d => d.dateISO === selectedDate)
     : dailyRecommendations?.[0];
-  const selectedDayRecs = selectedDayData?.recommendations || [];
   
   // Limit to next 7 days
   const next7Days = dailyRecommendations ? dailyRecommendations.slice(0, 7) : [];
@@ -634,7 +622,7 @@ export default function Streaming() {
                 <h3 className="drop-header">Potential Drop Candidates</h3>
                 <p className="drop-explanation">Ranked by roster % — lowest rostered players are safest drops</p>
                 <div className="drop-list">
-                  {dropCandidates.slice(0, 5).map((drop: any, idx) => {
+                  {dropCandidates.slice(0, 5).map((drop: any) => {
                     const dropRosterPlayer = overview.roster.find(r => r.playerId === drop.playerId);
                     const rosterPct = drop.rosterPct;
                     
@@ -717,7 +705,7 @@ export default function Streaming() {
               {filteredFreeAgents.length === 0 ? (
                 <div className="fa-empty">No players found</div>
               ) : (
-                filteredFreeAgents.slice(0, 25).map((fa, idx) => {
+                filteredFreeAgents.slice(0, 25).map((fa) => {
                   const isSelected = selectedPlayerId === fa.playerId;
                   
                   // Calculate fit based on player's per-game stats vs focus categories
