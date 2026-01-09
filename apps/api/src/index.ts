@@ -498,10 +498,13 @@ app.get("/leagues/:leagueId/teams/:teamId/roster/stats", async (req, res) => {
 
       let headshotUrl: string | null = null;
       if (player.providerPlayerId) {
-        headshotUrl = proxiedImage(
-          req,
-          `https://a.espncdn.com/i/headshots/nba/players/full/${player.providerPlayerId}.png`
-        );
+        const cleanPlayerId = cleanProviderPlayerId(player.providerPlayerId);
+        if (cleanPlayerId) {
+          headshotUrl = proxiedImage(
+            req,
+            `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`
+          );
+        }
       }
 
       // Extract player stats with normalized source metadata, filtered by league seasonYear
