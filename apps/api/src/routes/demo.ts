@@ -32,10 +32,10 @@ router.get('/snapshots', async (req: express.Request, res: express.Response) => 
       },
     });
 
-    res.json({ ok: true, snapshots });
+    (res as any).json({ ok: true, snapshots });
   } catch (error) {
     console.error('[DemoSnapshots] Error:', error);
-    res.status(500).json({ 
+    (res as any).status(500).json({ 
       ok: false, 
       error: 'Failed to fetch demo snapshots' 
     });
@@ -125,7 +125,7 @@ router.post('/start', async (req: express.Request, res: express.Response) => {
     });
 
     // Return the demo session info
-    res.json({
+    (res as any).json({
       ok: true,
       demoSnapshotId: snapshotId,
       leagueId: demoLeague.id,
@@ -145,7 +145,7 @@ router.post('/start', async (req: express.Request, res: express.Response) => {
     });
   } catch (error) {
     console.error('[DemoStart] Error:', error);
-    res.status(500).json({
+    (res as any).status(500).json({
       ok: false,
       error: 'Failed to start demo session',
     });
@@ -157,14 +157,14 @@ router.post('/start', async (req: express.Request, res: express.Response) => {
  * End the current demo session by clearing the cookie
  */
 router.post('/end', (req: express.Request, res: express.Response) => {
-  res.clearCookie('demo_snapshot', {
+  (res as any).clearCookie('demo_snapshot', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
   });
 
-  res.json({
+  (res as any).json({
     ok: true,
     message: 'Demo session ended',
   });
@@ -179,7 +179,7 @@ router.get('/status', async (req: express.Request, res: express.Response) => {
     const demoSnapshotId = req.cookies.demo_snapshot;
 
     if (!demoSnapshotId) {
-      return res.json({
+      return (res as any).json({
         ok: true,
         isDemo: false,
         demoSnapshotId: null,
@@ -200,7 +200,7 @@ router.get('/status', async (req: express.Request, res: express.Response) => {
         path: '/',
       });
 
-      return res.json({
+      return (res as any).json({
         ok: true,
         isDemo: false,
         demoSnapshotId: null,
@@ -220,7 +220,7 @@ router.get('/status', async (req: express.Request, res: express.Response) => {
       },
     });
 
-    res.json({
+    (res as any).json({
       ok: true,
       isDemo: true,
       demoSnapshotId,
@@ -229,7 +229,7 @@ router.get('/status', async (req: express.Request, res: express.Response) => {
     });
   } catch (error) {
     console.error('[DemoStatus] Error:', error);
-    res.status(500).json({
+    (res as any).status(500).json({
       ok: false,
       error: 'Failed to check demo status',
     });

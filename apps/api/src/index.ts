@@ -239,7 +239,7 @@ app.get("/resolve/team/:leagueId/:teamKey", async (req, res) => {
       where: { id: leagueId },
       select: { id: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     const uuidRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -368,7 +368,7 @@ app.get("/leagues/:leagueId/teams/:teamId/roster", async (req, res) => {
     const demoSnapshotId = req.demoScope?.demoSnapshotId || null;
 
     const league = await getLeagueScoped(leagueId, demoSnapshotId);
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     const team = await getTeamScoped(teamId, demoSnapshotId);
     if (!team || team.leagueId !== leagueId) {
@@ -421,7 +421,7 @@ app.get("/leagues/:leagueId/teams/:teamId/roster/stats", async (req, res) => {
       where: { id: leagueId },
       select: { id: true, seasonYear: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     const team = await prisma.team.findFirst({
       where: { id: teamId, leagueId },
@@ -515,7 +515,7 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
       where: { id: leagueId },
       select: { id: true, name: true, seasonYear: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     // Get all teams for league averages calculation
     const allTeams = await prisma.team.findMany({
@@ -794,7 +794,7 @@ app.get("/leagues/:leagueId/free-agents", async (req, res) => {
       where: { id: leagueId },
       select: { id: true, name: true, seasonYear: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     // Get all active roster slots in the league to determine owned players
     const activeRosterSlots = await prisma.rosterSlot.findMany({
@@ -2313,7 +2313,7 @@ app.get("/leagues/:leagueId/streaming/schedule", async (req, res) => {
       where: { id: leagueId },
       select: { id: true, name: true, seasonYear: true, settings: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     // Get scoring period info
     const firstTeam = await prisma.team.findFirst({
@@ -2516,7 +2516,7 @@ app.get("/leagues/:leagueId/streaming/plan", async (req, res) => {
       where: { id: leagueId },
       select: { id: true, name: true, seasonYear: true, settings: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     // Get scoring period info
     const firstTeam = await prisma.team.findFirst({
@@ -2882,7 +2882,7 @@ app.post("/leagues/:leagueId/streaming/impact", express.json(), async (req, res)
       where: { id: leagueId },
       select: { id: true, name: true, seasonYear: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     // Get team data
     const team = await prisma.team.findFirst({
@@ -3153,7 +3153,7 @@ app.get("/leagues/:leagueId/streaming/recommendations", async (req, res) => {
       where: { id: leagueId },
       select: { id: true, name: true, seasonYear: true, settings: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     // Get all teams
     const allTeams = await prisma.team.findMany({
@@ -3583,7 +3583,7 @@ app.get("/leagues/:leagueId/teams/:teamId/weekly-projection", async (req, res) =
       where: { id: leagueId },
       select: { id: true, seasonYear: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     const team = await prisma.team.findFirst({
       where: { id: teamId, leagueId },
@@ -3748,7 +3748,7 @@ app.get("/leagues/:leagueId/teams/:teamId/header", async (req, res) => {
       where: { id: leagueId },
       select: { id: true, name: true, updatedAt: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     const team = await prisma.team.findFirst({
       where: { id: teamId, leagueId },
@@ -3817,7 +3817,7 @@ app.get("/leagues/:leagueId/standings", async (req, res) => {
       where: { id: leagueId },
       select: { id: true, name: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     const teams = await prisma.team.findMany({
       where: { leagueId },
@@ -3859,7 +3859,7 @@ app.get("/leagues/:leagueId/matchup/current", async (req, res) => {
       where: { id: leagueId },
       select: { id: true, name: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     const team = await prisma.team.findFirst({
       where: { id: teamId, leagueId },
@@ -4581,7 +4581,7 @@ app.get("/debug/team/:leagueId/:teamId/roster-diff", async (req, res) => {
       where: { id: leagueId },
       select: { id: true, name: true, providerLeagueId: true, seasonYear: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     const team = await prisma.team.findUnique({
       where: { id: teamId },
@@ -4741,7 +4741,7 @@ app.get("/debug/weekly-projections/:leagueId", async (req: express.Request, res:
       where: { id: leagueId },
       select: { id: true, name: true },
     });
-    if (!league) return res.status(404).json({ error: "League not found" });
+    if (!league) return (res as any).status(404).json({ error: "League not found" });
 
     const allTeams = await prisma.team.findMany({
       where: { leagueId },
@@ -4781,7 +4781,7 @@ app.get("/debug/weekly-projections/:leagueId", async (req: express.Request, res:
     const scoringPeriodStartDate = firstTeamMeta.scoringPeriodStartDate || null;
     const scoringPeriodEndDate = firstTeamMeta.scoringPeriodEndDate || null;
 
-    return res.json({
+    return (res as any).json({
       league: { id: league.id, name: league.name },
       scoringPeriod: {
         id: currentMatchupPeriod,
