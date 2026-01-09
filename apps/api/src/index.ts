@@ -197,13 +197,12 @@ function cleanProviderPlayerId(providerPlayerId: string | null): string | null {
   return providerPlayerId.split('_demo_')[0];
 }
 
-async function getTeamAvatarUrl(req: express.Request, teamDbId: string) {
-  const team = await prisma.team.findUnique({
-    where: { id: teamDbId },
-    select: { meta: true },
-  });
+async function getTeamAvatarUrl(req: express.Request, teamDbId: string, demoSnapshotId: string | null = null) {
+  // Use demo scoped team lookup
+  const team = await getTeamScoped(teamDbId, demoSnapshotId);
+  if (!team) return null;
 
-  const meta = (team?.meta as any) || {};
+  const meta = (team.meta as any) || {};
 
   // ESPN logo fields vary a lot; try them all
   const logo =
@@ -219,17 +218,34 @@ async function getTeamAvatarUrl(req: express.Request, teamDbId: string) {
   const proxiedLogo = proxiedImage(req, logo);
   if (proxiedLogo) return proxiedLogo;
 
-  // 2) Fallback: first roster player's headshot
+  // 2) Fallback: first roster player's headshot (use demo scoped roster slots)
+  const league = await prisma.league.findFirst({
+    where: { teams: { some: { id: teamDbId } } },
+    select: { id: true, demoSnapshotId: true },
+  });
+  
+  if (!league) return null;
+  
+  const rosterWhere: any = { teamId: teamDbId, endAt: null };
+  if (demoSnapshotId || league.demoSnapshotId) {
+    rosterWhere.demoSnapshotId = demoSnapshotId || league.demoSnapshotId;
+  } else {
+    rosterWhere.demoSnapshotId = null;
+  }
+  
   const firstRoster = await prisma.rosterSlot.findFirst({
-    where: { teamId: teamDbId, endAt: null },
+    where: rosterWhere,
     select: { player: { select: { providerPlayerId: true } } },
     orderBy: { createdAt: "asc" },
   });
 
   const pid = firstRoster?.player?.providerPlayerId;
   if (pid) {
-    const headshot = `https://a.espncdn.com/i/headshots/nba/players/full/${pid}.png`;
-    return proxiedImage(req, headshot);
+    const cleanPlayerId = cleanProviderPlayerId(pid);
+    if (cleanPlayerId) {
+      const headshot = `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`;
+      return proxiedImage(req, headshot);
+    }
   }
 
   return null;
@@ -677,7 +693,8 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
     );
 
     // Get team avatar
-    const teamAvatarUrl = await getTeamAvatarUrl(req, selectedTeam.id);
+    const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
+    const teamAvatarUrl = await getTeamAvatarUrl(req, selectedTeam.id, demoSnapshotId);
 
     const teamProjection: WeeklyTeamProjection = {
       teamId: selectedTeam.id,
@@ -5073,26 +5090,28 @@ app.get("/leagues/:leagueId/power-rankings", async (req, res) => {
 app.get("/leagues/:leagueId/overview", async (req, res) => {
   const leagueId = req.params.leagueId;
 
-  const league = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: { id: true, name: true, seasonYear: true },
-  });
+  // Use demo scope
+  const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
+  
+  const league = await getLeagueScoped(leagueId, demoSnapshotId);
   if (!league) return (res as any).status(404).json({ error: "League not found" });
 
-  const teams = await prisma.team.findMany({
-    where: { leagueId },
-    select: {
-      id: true,
-      name: true,
-      rosterSlots: { 
-        where: { endAt: null }, 
-        select: { 
-          meta: true,
-          player: { select: { meta: true } } 
-        } 
-      },
-    },
-  });
+  // Get all teams with demo scope
+  const allTeamsData = await getTeamsScoped(leagueId, demoSnapshotId);
+  
+  // Fetch roster slots for each team
+  const teams = await Promise.all(allTeamsData.map(async (t: any) => {
+    const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
+    const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
+    return {
+      id: t.id,
+      name: t.name,
+      rosterSlots: currentSlots.map((slot: any) => ({
+        meta: slot.meta,
+        player: { meta: slot.player?.meta || null },
+      })),
+    };
+  }));
 
   const teamTotals: TeamTotals[] = teams.map((t) => {
     // Filter out IR players from team totals
@@ -5133,66 +5152,62 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
     ? (Array.isArray(req.query.untouchables) ? req.query.untouchables : [req.query.untouchables]).map(String)
     : [];
 
-  const league = await prisma.league.findUnique({
-    where: { id: leagueId },
-    select: { id: true, name: true, seasonYear: true },
-  });
+  // Use demo scope
+  const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
+  
+  const league = await getLeagueScoped(leagueId, demoSnapshotId);
   if (!league) return (res as any).status(404).json({ error: "League not found" });
 
+  // Get my team with demo scope
+  const myTeamData = await getTeamScoped(teamId, demoSnapshotId);
+  if (!myTeamData || myTeamData.leagueId !== leagueId) {
+    return (res as any).status(404).json({ error: "Team not found or not in league" });
+  }
+
   // Get scoring period info (for weekly projections)
-  const myTeamMeta = await prisma.team.findFirst({
-    where: { id: teamId, leagueId },
-    select: { meta: true },
-  });
-  const teamMeta = (myTeamMeta?.meta as any) || {};
+  const teamMeta = (myTeamData.meta as any) || {};
   const defaultGamesPerWeek = 4;
   const scoringPeriodStartDate = teamMeta.scoringPeriodStartDate || undefined;
   const scoringPeriodEndDate = teamMeta.scoringPeriodEndDate || undefined;
 
-  const myTeam = await prisma.team.findFirst({
-    where: { id: teamId, leagueId },
-    select: {
-      id: true,
-      name: true,
-      rosterSlots: {
-        where: { endAt: null },
-        select: {
-          meta: true,
-          player: {
-            select: {
-              id: true,
-              fullName: true,
-              meta: true,
-              providerPlayerId: true,
-            },
-          },
-        },
+  // Get my team roster slots
+  const myRosterSlots = await getRosterSlotsScoped(leagueId, teamId, demoSnapshotId);
+  const myCurrentSlots = myRosterSlots.filter((slot: any) => !slot.endAt);
+  const myTeam = {
+    id: myTeamData.id,
+    name: myTeamData.name,
+    rosterSlots: myCurrentSlots.map((slot: any) => ({
+      meta: slot.meta,
+      player: {
+        id: slot.playerId,
+        fullName: slot.player?.fullName || 'Unknown',
+        meta: slot.player?.meta || null,
+        providerPlayerId: slot.player?.providerPlayerId || null,
       },
-    },
-  });
-  if (!myTeam) return res.status(404).json({ error: "Team not found or not in league" });
+    })),
+  };
 
-  const allTeams = await prisma.team.findMany({
-    where: { leagueId },
-    select: {
-      id: true,
-      name: true,
-      rosterSlots: {
-        where: { endAt: null },
-        select: {
-          meta: true,
-          player: {
-            select: {
-              id: true,
-              fullName: true,
-              meta: true,
-              providerPlayerId: true,
-            },
-          },
+  // Get all teams with demo scope
+  const allTeamsData = await getTeamsScoped(leagueId, demoSnapshotId);
+  
+  // Fetch roster slots for each team
+  const allTeams = await Promise.all(allTeamsData.map(async (t: any) => {
+    const rosterSlots = await getRosterSlotsScoped(leagueId, t.id, demoSnapshotId);
+    const currentSlots = rosterSlots.filter((slot: any) => !slot.endAt);
+    return {
+      id: t.id,
+      name: t.name,
+      rosterSlots: currentSlots.map((slot: any) => ({
+        meta: slot.meta,
+        player: {
+          id: slot.playerId,
+          fullName: slot.player?.fullName || 'Unknown',
+          meta: slot.player?.meta || null,
+          providerPlayerId: slot.player?.providerPlayerId || null,
         },
-      },
-    },
-  });
+      })),
+    };
+  }));
 
   // Compute team totals for all teams (for league distribution)
   const teamsTotals: TeamTotals[] = [];
