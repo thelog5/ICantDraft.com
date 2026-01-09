@@ -629,8 +629,18 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
 
     for (const team of allTeams) {
       try {
+        // Filter out roster slots without player.meta before calculating
+        const validRosterSlots = team.rosterSlots.filter((slot: any) => 
+          slot.player && slot.player.meta
+        );
+        
+        if (validRosterSlots.length === 0) {
+          console.warn(`[Weekly Projections] Team ${team.id} (${team.name}) has no roster slots with player.meta`);
+          continue;
+        }
+        
         const { totals, totalsWithAttempts } = await calculateTeamWeeklyProjection(
-          team.rosterSlots,
+          validRosterSlots,
           league.seasonYear,
           defaultGamesPerWeek,
           scoringPeriodStartDate || undefined,
@@ -639,6 +649,7 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
         teamProjections.push({ teamId: team.id, totals, totalsWithAttempts });
       } catch (err) {
         console.error(`[Weekly Projections] Error calculating projection for team ${team.id} (${team.name}):`, err);
+        console.error(`[Weekly Projections] Error stack:`, err instanceof Error ? err.stack : 'No stack');
         // Skip this team if calculation fails
       }
     }
@@ -704,8 +715,17 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
     let teamTotals: NineCatTotals;
     let teamPlayers: any[];
     try {
+      // Filter out roster slots without player.meta before calculating
+      const validRosterSlots = selectedTeam.rosterSlots.filter((slot: any) => 
+        slot.player && slot.player.meta
+      );
+      
+      if (validRosterSlots.length === 0) {
+        return res.status(400).json({ error: `Team ${selectedTeam.name} has no roster slots with player stats. Please ensure player data has been ingested.` });
+      }
+      
       const result = await calculateTeamWeeklyProjection(
-        selectedTeam.rosterSlots,
+        validRosterSlots,
         league.seasonYear,
         defaultGamesPerWeek,
         scoringPeriodStartDate || undefined,
@@ -715,6 +735,7 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
       teamPlayers = result.players;
     } catch (err) {
       console.error(`[Weekly Projections] Error calculating projection for selected team ${selectedTeam.id}:`, err);
+      console.error(`[Weekly Projections] Error stack:`, err instanceof Error ? err.stack : 'No stack');
       return res.status(500).json({ error: `Failed to calculate weekly projection: ${err instanceof Error ? err.message : String(err)}` });
     }
 
@@ -759,17 +780,31 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
         let opponentTotals: NineCatTotals;
         let opponentPlayers: any[];
         try {
-          const result = await calculateTeamWeeklyProjection(
-            opponent.rosterSlots,
-            league.seasonYear,
-            defaultGamesPerWeek,
-            scoringPeriodStartDate || undefined,
-            scoringPeriodEndDate || undefined
+          // Filter out roster slots without player.meta before calculating
+          const validOpponentSlots = opponent.rosterSlots.filter((slot: any) => 
+            slot.player && slot.player.meta
           );
-          opponentTotals = result.totals;
-          opponentPlayers = result.players;
+          
+          if (validOpponentSlots.length === 0) {
+            console.warn(`[Weekly Projections] Opponent ${opponent.id} (${opponent.name}) has no roster slots with player.meta`);
+            opponentTotals = {
+              pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, threes: 0, tov: 0, fgPct: 0, ftPct: 0
+            };
+            opponentPlayers = [];
+          } else {
+            const result = await calculateTeamWeeklyProjection(
+              validOpponentSlots,
+              league.seasonYear,
+              defaultGamesPerWeek,
+              scoringPeriodStartDate || undefined,
+              scoringPeriodEndDate || undefined
+            );
+            opponentTotals = result.totals;
+            opponentPlayers = result.players;
+          }
         } catch (err) {
           console.error(`[Weekly Projections] Error calculating projection for opponent ${opponent.id}:`, err);
+          console.error(`[Weekly Projections] Error stack:`, err instanceof Error ? err.stack : 'No stack');
           // Continue without opponent projection if it fails
           opponentTotals = {
             pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, threes: 0, tov: 0, fgPct: 0, ftPct: 0
