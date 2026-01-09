@@ -628,14 +628,19 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
     const teamProjections: Array<{ teamId: string; totals: NineCatTotals; totalsWithAttempts: any }> = [];
 
     for (const team of allTeams) {
-      const { totals, totalsWithAttempts } = await calculateTeamWeeklyProjection(
-        team.rosterSlots,
-        league.seasonYear,
-        defaultGamesPerWeek,
-        scoringPeriodStartDate || undefined,
-        scoringPeriodEndDate || undefined
-      );
-      teamProjections.push({ teamId: team.id, totals, totalsWithAttempts });
+      try {
+        const { totals, totalsWithAttempts } = await calculateTeamWeeklyProjection(
+          team.rosterSlots,
+          league.seasonYear,
+          defaultGamesPerWeek,
+          scoringPeriodStartDate || undefined,
+          scoringPeriodEndDate || undefined
+        );
+        teamProjections.push({ teamId: team.id, totals, totalsWithAttempts });
+      } catch (err) {
+        console.error(`[Weekly Projections] Error calculating projection for team ${team.id} (${team.name}):`, err);
+        // Skip this team if calculation fails
+      }
     }
 
     // Calculate league averages (MUST be constant regardless of teamId)
@@ -696,13 +701,22 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
     }
 
     // Calculate selected team's projection
-    const { totals: teamTotals, players: teamPlayers } = await calculateTeamWeeklyProjection(
-      selectedTeam.rosterSlots,
-      league.seasonYear,
-      defaultGamesPerWeek,
-      scoringPeriodStartDate || undefined,
-      scoringPeriodEndDate || undefined
-    );
+    let teamTotals: NineCatTotals;
+    let teamPlayers: any[];
+    try {
+      const result = await calculateTeamWeeklyProjection(
+        selectedTeam.rosterSlots,
+        league.seasonYear,
+        defaultGamesPerWeek,
+        scoringPeriodStartDate || undefined,
+        scoringPeriodEndDate || undefined
+      );
+      teamTotals = result.totals;
+      teamPlayers = result.players;
+    } catch (err) {
+      console.error(`[Weekly Projections] Error calculating projection for selected team ${selectedTeam.id}:`, err);
+      return res.status(500).json({ error: `Failed to calculate weekly projection: ${err instanceof Error ? err.message : String(err)}` });
+    }
 
     // Get team avatar
     const teamAvatarUrl = await getTeamAvatarUrl(req, selectedTeam.id, demoSnapshotId);
@@ -742,13 +756,26 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
 
       if (opponent) {
         // Calculate opponent's projection
-        const { totals: opponentTotals, players: opponentPlayers } = await calculateTeamWeeklyProjection(
-          opponent.rosterSlots,
-          league.seasonYear,
-          defaultGamesPerWeek,
-          scoringPeriodStartDate || undefined,
-          scoringPeriodEndDate || undefined
-        );
+        let opponentTotals: NineCatTotals;
+        let opponentPlayers: any[];
+        try {
+          const result = await calculateTeamWeeklyProjection(
+            opponent.rosterSlots,
+            league.seasonYear,
+            defaultGamesPerWeek,
+            scoringPeriodStartDate || undefined,
+            scoringPeriodEndDate || undefined
+          );
+          opponentTotals = result.totals;
+          opponentPlayers = result.players;
+        } catch (err) {
+          console.error(`[Weekly Projections] Error calculating projection for opponent ${opponent.id}:`, err);
+          // Continue without opponent projection if it fails
+          opponentTotals = {
+            pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, threes: 0, tov: 0, fgPct: 0, ftPct: 0
+          };
+          opponentPlayers = [];
+        }
 
         const opponentAvatarUrl = await getTeamAvatarUrl(req, opponent.id, demoSnapshotId);
 
@@ -882,8 +909,12 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
       liveCategories,
     });
   } catch (err) {
-    console.error("Error fetching weekly projections:", err);
-    return res.status(500).json({ error: "Failed to fetch weekly projections" });
+    console.error("[Weekly Projections] Error fetching weekly projections:", err);
+    console.error("[Weekly Projections] Stack trace:", err instanceof Error ? err.stack : 'No stack trace');
+    return res.status(500).json({ 
+      error: "Failed to fetch weekly projections",
+      details: err instanceof Error ? err.message : String(err)
+    });
   }
 });
 
@@ -5059,7 +5090,15 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
   const ranksMap = rankTeams(teamsTotals);
 
   const targetTeamTotals = teamsTotals.find((t) => t.teamId === teamId);
-  if (!targetTeamTotals) return res.status(500).json({ error: "Target team totals not found" });
+  if (!targetTeamTotals) {
+    console.error(`[Team Profile] Target team totals not found for teamId: ${teamId}`);
+    console.error(`[Team Profile] Available team IDs in teamsTotals: ${teamsTotals.map(t => t.teamId).join(', ')}`);
+    return res.status(500).json({ 
+      error: "Target team totals not found. The team may not have any active roster players with stats.",
+      teamId,
+      availableTeams: teamsTotals.map(t => ({ teamId: t.teamId, teamName: t.teamName }))
+    });
+  }
 
   const zScores = zScore(targetTeamTotals, dist);
   const normalizedTeamScore0to9 = teamScore(zScores);
@@ -5125,8 +5164,12 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
 
     return (res as any).status(200).json({ profile, leagueAverage, leagueRanksSummary });
   } catch (error: any) {
-    console.error("Error fetching team profile:", error);
-    return (res as any).status(500).json({ error: "Failed to fetch team profile" });
+    console.error("[Team Profile] Error fetching team profile:", error);
+    console.error("[Team Profile] Stack trace:", error instanceof Error ? error.stack : 'No stack trace');
+    return (res as any).status(500).json({ 
+      error: "Failed to fetch team profile",
+      details: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
