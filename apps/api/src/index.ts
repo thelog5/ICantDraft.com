@@ -226,18 +226,12 @@ async function getTeamAvatarUrl(req: express.Request, teamDbId: string, demoSnap
   
   if (!league) return null;
   
-  const rosterWhere: any = { teamId: teamDbId, endAt: null };
-  if (demoSnapshotId || league.demoSnapshotId) {
-    rosterWhere.demoSnapshotId = demoSnapshotId || league.demoSnapshotId;
-  } else {
-    rosterWhere.demoSnapshotId = null;
-  }
+  // Use getRosterSlotsScoped to respect demo scope
+  const rosterSlots = await getRosterSlotsScoped(league.id, teamDbId, demoSnapshotId);
+  const currentSlots = rosterSlots.filter(slot => slot.endAt === null);
   
-  const firstRoster = await prisma.rosterSlot.findFirst({
-    where: rosterWhere,
-    select: { player: { select: { providerPlayerId: true } } },
-    orderBy: { createdAt: "asc" },
-  });
+  // Find first slot with a player that has a providerPlayerId
+  const firstRoster = currentSlots.find(slot => slot.player?.providerPlayerId);
 
   const pid = firstRoster?.player?.providerPlayerId;
   if (pid) {
@@ -5073,6 +5067,9 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
   const targetRoster = allTeams.find((t) => t.id === teamId);
   // Check stats missing only for active (non-IR) players
   const activeTargetSlots = targetRoster?.rosterSlots.filter((slot) => {
+    // Must have player and player meta
+    if (!slot.player || !slot.player.meta) return false;
+    
     const slotMeta = (slot.meta as any) || {};
     const isIR = slotMeta.isIR === true || 
       slotMeta.status === "IR" || 
@@ -5080,8 +5077,17 @@ app.get("/leagues/:leagueId/teams/:teamId/profile", async (req, res) => {
       slotMeta.status === "OUT";
     return !isIR;
   }) || [];
-  const statsMissing =
-    activeTargetSlots.some((slot) => extractPlayerStats(slot.player.meta, league.seasonYear).missing) ?? false;
+  
+  let statsMissing = false;
+  try {
+    statsMissing = activeTargetSlots.some((slot) => {
+      if (!slot.player?.meta) return false;
+      return extractPlayerStats(slot.player.meta, league.seasonYear).missing;
+    }) ?? false;
+  } catch (err) {
+    console.error(`Error checking stats missing for team ${teamId}:`, err);
+    statsMissing = false;
+  }
 
   const profile: TeamProfile = {
     teamId: team.id,
@@ -5234,17 +5240,18 @@ app.get("/leagues/:leagueId/overview", async (req, res) => {
 
 // Trade suggestions
 app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) => {
-  const leagueId = req.params.leagueId;
-  const teamId = req.params.teamId;
-  const tradeSize = req.query.tradeSize as string | undefined; // "1for1" | "2for2" | undefined (both)
-  const excludeUntouchables = req.query.excludeUntouchables !== "false"; // Default true
-  const showQuestionable = req.query.showQuestionable === "true";
-  const untouchablePlayerIds = req.query.untouchables 
-    ? (Array.isArray(req.query.untouchables) ? req.query.untouchables : [req.query.untouchables]).map(String)
-    : [];
+  try {
+    const leagueId = req.params.leagueId;
+    const teamId = req.params.teamId;
+    const tradeSize = req.query.tradeSize as string | undefined; // "1for1" | "2for2" | undefined (both)
+    const excludeUntouchables = req.query.excludeUntouchables !== "false"; // Default true
+    const showQuestionable = req.query.showQuestionable === "true";
+    const untouchablePlayerIds = req.query.untouchables 
+      ? (Array.isArray(req.query.untouchables) ? req.query.untouchables : [req.query.untouchables]).map(String)
+      : [];
 
-  // Use demo scope
-  const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
+    // Use demo scope
+    const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
   
   const league = await getLeagueScoped(leagueId, demoSnapshotId);
   if (!league) {
@@ -5408,8 +5415,9 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
     const theirPlayers: PlayerValue[] = [];
     for (const slot of opponentTeam.rosterSlots) {
       const slotMeta = (slot.meta as any) || {};
-      const headshotUrl = slot.player.providerPlayerId
-        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${slot.player.providerPlayerId}.png`)
+      const cleanPlayerId = cleanProviderPlayerId(slot.player.providerPlayerId);
+      const headshotUrl = cleanPlayerId
+        ? proxiedImage(req, `https://a.espncdn.com/i/headshots/nba/players/full/${cleanPlayerId}.png`)
         : null;
       const playerValue = computePlayerValue(
         {
@@ -5971,7 +5979,7 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
       // Generate rationale
       const rationale = generateRationale(analysis, myGrade, oppGrade);
 
-      const opponentAvatarUrl = await getTeamAvatarUrl(req, opponentTeam.id);
+      const opponentAvatarUrl = await getTeamAvatarUrl(req, opponentTeam.id, demoSnapshotId);
 
       // Prepare per-category data for details view
       const categoryKeys: CategoryKey[] = ["pts", "reb", "ast", "stl", "blk", "threes", "fgPct", "ftPct", "tov"];
@@ -6156,6 +6164,14 @@ app.get("/leagues/:leagueId/teams/:teamId/trade-suggestions", async (req, res) =
   }
 
   return res.status(200).json(response);
+  } catch (error: any) {
+    console.error("[Trade Suggestions] Error:", error);
+    return res.status(500).json({ 
+      ok: false,
+      error: "Failed to fetch trade suggestions",
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
 });
 
 
