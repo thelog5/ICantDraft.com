@@ -8,7 +8,7 @@ import './Setup.css';
 const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 const DEMO_LEAGUE_ID = import.meta.env.VITE_DEMO_LEAGUE_ID;
 const DEMO_TEAM_ID = import.meta.env.VITE_DEMO_TEAM_ID;
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://i-cant-draft-com-api-navy.vercel.app';
 
 export default function Setup() {
   const navigate = useNavigate();
