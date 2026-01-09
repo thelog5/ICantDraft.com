@@ -191,7 +191,7 @@ async function getTeamAvatarUrl(req: express.Request, teamDbId: string) {
 
 // Health check
 app.get("/health", (_req, res) => {
-  res.status(200).json({ ok: true });
+  (res as any).status(200).json({ ok: true, timestamp: Date.now() });
 });
 
 // Resolve league key (UUID or providerLeagueId) to internal league ID
