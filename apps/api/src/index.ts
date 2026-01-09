@@ -699,7 +699,6 @@ app.get("/leagues/:leagueId/weekly-projections", async (req, res) => {
     );
 
     // Get team avatar
-    const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
     const teamAvatarUrl = await getTeamAvatarUrl(req, selectedTeam.id, demoSnapshotId);
 
     // Add headshots to team players
