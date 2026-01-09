@@ -3935,37 +3935,33 @@ app.get("/leagues/:leagueId/matchup/current", async (req, res) => {
   const leagueId = req.params.leagueId;
   const teamId = req.query.teamId as string;
 
-  if (!teamId) return res.status(400).json({ error: "teamId query parameter required" });
+  if (!teamId) return (res as any).status(400).json({ error: "teamId query parameter required" });
 
   try {
-    const league = await prisma.league.findUnique({
-      where: { id: leagueId },
-      select: { id: true, name: true },
-    });
+    // Use demo scope
+    const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
+    
+    const league = await getLeagueScoped(leagueId, demoSnapshotId);
     if (!league) return (res as any).status(404).json({ error: "League not found" });
 
-    const team = await prisma.team.findFirst({
-      where: { id: teamId, leagueId },
-      select: { id: true, name: true, meta: true },
-    });
-    if (!team) return res.status(404).json({ error: "Team not found" });
+    const team = await getTeamScoped(teamId, demoSnapshotId);
+    if (!team || team.leagueId !== leagueId) {
+      return (res as any).status(404).json({ error: "Team not found" });
+    }
 
     const teamMeta = (team.meta as any) || {};
     const matchupData = teamMeta.matchup || null;
 
     if (!matchupData || !matchupData.opponentTeamId) {
-      return res.json({ ok: false, reason: "No current matchup data available. Run ESPN data sync." });
+      return (res as any).json({ ok: false, reason: "No current matchup data available. Run ESPN data sync." });
     }
 
-    const opponent = await prisma.team.findFirst({
-      where: { leagueId, providerTeamId: String(matchupData.opponentTeamId) },
-      select: { id: true, name: true },
-    });
+    // Find opponent using demo scoped teams
+    const allTeams = await getTeamsScoped(leagueId, demoSnapshotId);
+    const opponent = allTeams.find((t: any) => t.providerTeamId === String(matchupData.opponentTeamId));
 
-    if (!opponent) return res.json({ ok: false, reason: "Opponent team not found" });
+    if (!opponent) return (res as any).json({ ok: false, reason: "Opponent team not found" });
 
-    // Use demo scope
-    const demoSnapshotId = (req as any).demoScope?.demoSnapshotId || null;
     const teamAvatar = await getTeamAvatarUrl(req, team.id, demoSnapshotId);
     const oppAvatar = await getTeamAvatarUrl(req, opponent.id, demoSnapshotId);
 
