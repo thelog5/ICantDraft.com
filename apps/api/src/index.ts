@@ -72,32 +72,12 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.use((req, res, next) => {
-  // Get origin from request or env
   const requestOrigin = req.headers.origin;
-  const webOrigin = process.env.WEB_ORIGIN || process.env.CORS_ORIGIN || "http://localhost:5173";
-  
-  // Default: allow all vercel.app origins, localhost, or configured origin
-  let allowedOrigin: string = webOrigin;
-  
-  if (requestOrigin) {
-    // Always allow vercel.app origins (most permissive for Vercel deployments)
-    if (requestOrigin.includes('vercel.app')) {
-      allowedOrigin = requestOrigin;
-    }
-    // Allow localhost for development
-    else if (requestOrigin.includes('localhost')) {
-      allowedOrigin = requestOrigin;
-    }
-    // Allow if matches configured origin
-    else if (requestOrigin === webOrigin) {
-      allowedOrigin = requestOrigin;
-    }
-    // In demo mode, be more permissive
-    else if (process.env.DEMO_MODE === 'true') {
-      allowedOrigin = requestOrigin;
-    }
-  }
-  
+  const origins = (process.env.WEB_ORIGIN || process.env.CORS_ORIGIN || "http://localhost:5173")
+    .split(',').map(value => { try { return new URL(value.trim()).origin; } catch { return ''; } });
+  const allowedOrigin = requestOrigin && origins.includes(requestOrigin) ? requestOrigin : origins[0];
+  (res as any).header("Vary", "Origin");
+
   // Handle OPTIONS preflight requests FIRST, before any redirects
   if (req.method === "OPTIONS") {
     (res as any).header("Access-Control-Allow-Origin", allowedOrigin);
@@ -181,7 +161,7 @@ function normalizeEspnUrl(url: string | null): string | null {
 function proxiedImage(req: express.Request, url: string | null) {
   const fixed = normalizeEspnUrl(url);
   if (!fixed) return null;
-  const protocol = (req as any).protocol || 'http';
+  const protocol = process.env.NODE_ENV === 'production' ? 'https' : req.protocol;
   const host = (req as any).get ? (req as any).get("host") : (req as any).headers?.host || 'localhost';
   const base = `${protocol}://${host}`;
   return `${base}/proxy/image?url=${encodeURIComponent(fixed)}`;

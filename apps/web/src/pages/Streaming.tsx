@@ -572,6 +572,7 @@ export default function Streaming() {
 
 
                 {/* Matchup Result Change */}
+                {impactData?.message && <p role="status">{impactData.message}</p>}
                 {impactData && impactData.matchupResultBefore && impactData.matchupResultAfter && (
                   <div className="matchup-result-change">
                     <div className="matchup-label">Matchup Impact</div>
@@ -797,6 +798,11 @@ export default function Streaming() {
                     <div
                       key={fa.playerId}
                       className={`fa-card ${isSelected ? 'selected' : ''}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isSelected}
+                      aria-label={`View ${fa.name} impact`}
+                      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedPlayerId(fa.playerId); } }}
                       onClick={() => setSelectedPlayerId(fa.playerId)}
                     >
                       <div className="fa-card-top">

@@ -1,173 +1,31 @@
-.topnav-layout {
-  min-height: 100vh;
-  background-color: #f0f0f0;
-}
-
-.topnav-header {
-  background-color: #2d2d2d;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 0 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.topnav-left {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-}
-
-.topnav-logo {
-  display: flex;
-  align-items: center;
-  text-decoration: none;
-  padding: 0.75rem 0;
-}
-
-.logo-image {
-  height: 60px;
-  width: auto;
-  display: block;
-}
-
-.topnav-tabs {
-  display: flex;
-  gap: 0;
-  align-items: center;
-}
-
-.topnav-tab {
-  padding: 1rem 1.25rem;
-  text-decoration: none;
-  color: #ccc;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  border-bottom: 3px solid transparent;
-  transition: all 0.2s;
-}
-
-.topnav-tab:hover {
-  color: #fff;
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.topnav-tab.active {
-  color: #fff;
-  border-bottom-color: #fff;
-  font-weight: 600;
-}
-
-.topnav-right {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-.topnav-team {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.topnav-team-label {
-  font-size: 0.875rem;
-  color: #ccc;
-  font-weight: 500;
-}
-
-.topnav-team-name {
-  font-size: 0.9375rem;
-  color: #fff;
-  font-weight: 600;
-}
-
-.topnav-refresh:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.topnav-league {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.topnav-league-label {
-  font-size: 0.875rem;
-  color: #ccc;
-  font-weight: 500;
-}
-
-.topnav-league-name {
-  font-size: 0.9375rem;
-  color: #fff;
-  font-weight: 600;
-}
-
-.topnav-refresh {
-  padding: 0.5rem 1rem;
-  background-color: #0066cc;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.topnav-refresh:hover {
-  background-color: #0052a3;
-}
-
-.topnav-main {
-  padding: 1.5rem 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-@media (max-width: 1024px) {
-  .topnav-header {
-    flex-direction: column;
-    padding: 1rem;
-  }
-
-  .topnav-left {
-    width: 100%;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .topnav-tabs {
-    width: 100%;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-  }
-
-  .topnav-right {
-    width: 100%;
-    justify-content: space-between;
-  }
-}
-
-@media (max-width: 768px) {
-  .topnav-main {
-    padding: 1rem;
-  }
-
-  .topnav-tabs {
-    gap: 0;
-  }
-
-  .topnav-tab {
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
-  }
-}
-
+.topnav-layout { --accent:#d71920; --accent-hover:#b81219; --ink:#17191c; --muted:#656b73; --line:#e2e4e7; --surface:#fff; --canvas:#eef0f2; --positive:#23734d; --negative:#b83b46; min-height:100vh; background:var(--canvas); color:var(--ink); font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:1.5; }
+.topnav-header { background:#202226; position:sticky; top:0; z-index:100; box-shadow:0 2px 8px #00000012; }
+.topnav-brand-row { max-width:1440px; margin:auto; height:72px; display:flex; align-items:center; gap:32px; padding:0 36px; }
+.topnav-logo { display:block; width:260px; height:72px; position:relative; background:#fff; overflow:hidden; flex-shrink:0; transform:skew(-10deg); }
+.topnav-logo .logo-image { position:absolute; width:230px; height:auto; max-width:none; top:50%; left:15px; transform:translateY(-50%) skew(10deg); }
+.topnav-sport { display:flex; align-items:center; gap:10px; color:#f5f5f5; font-weight:700; font-size:11px; letter-spacing:1.3px; }
+.sport-format { color:#b4b8bf; border-left:1px solid #50545b; padding-left:12px; margin-left:4px; }
+.topnav-account { margin-left:auto; display:flex; align-items:center; gap:10px; color:#e2e4e8; font-size:12px; font-weight:600; }
+.topnav-account:hover { color:white; text-decoration:none; }
+.account-avatar { width:30px; height:30px; display:grid; place-items:center; border:1px solid #62666e; border-radius:50%; font-size:10px; }
+.topnav-tabs { max-width:1368px; margin:auto; display:flex; gap:28px; align-items:stretch; border-top:1px solid #ffffff12; overflow-x:auto; scrollbar-width:thin; }
+.topnav-tab { white-space:nowrap; padding:15px 3px 13px; color:#bcc0c6; font-size:13px; font-weight:700; border-bottom:3px solid transparent; transition:color .15s,border-color .15s; }
+.topnav-tab:hover { color:white; text-decoration:none; }
+.topnav-tab.active { color:white; border-bottom-color:var(--accent); }
+.workspace-context { background:white; border-bottom:1px solid var(--line); }
+.workspace-context-inner { max-width:1440px; margin:auto; min-height:54px; padding:10px 36px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.context-league,.context-status { display:flex; align-items:center; gap:12px; font-size:12px; }
+.context-label { color:var(--muted); font-size:9px; font-weight:700; letter-spacing:1.1px; }
+.context-divider { width:1px; height:15px; background:var(--line); }
+.context-team { color:var(--muted); }
+.context-status { font-size:9px; font-weight:700; letter-spacing:.7px; white-space:nowrap; }
+.status-dot { width:6px; height:6px; background:var(--accent); border-radius:50%; }
+.sample-caption { color:var(--muted); letter-spacing:0; font-weight:400; font-size:11px; }
+.topnav-main { max-width:1440px; padding:32px 36px 56px; margin:0 auto; width:100%; min-height:70vh; }
+.product-footer { max-width:1368px; margin:0 auto; padding:22px 0; border-top:1px solid #d6d9de; display:flex; justify-content:space-between; gap:16px; color:#767b83; font-size:11px; }
+.product-footer>span:first-child { font-weight:900; font-style:italic; color:#24262a; }
+.brand-red { color:var(--accent); }
+.skip-to-content { position:fixed; top:-60px; left:16px; background:white; padding:12px; z-index:200; }
+.skip-to-content:focus { top:12px; }
+@media(max-width:1100px){ .topnav-tabs{padding:0 24px;gap:24px;} .topnav-brand-row,.workspace-context-inner{padding-left:24px;padding-right:24px;} .sample-caption{display:none;} .topnav-main{padding:24px;} .product-footer{margin:0 24px;} }
+@media(max-width:650px){ .topnav-brand-row{height:62px;gap:14px;padding:0 16px;} .topnav-logo{width:190px;height:62px;} .topnav-logo .logo-image{width:172px;left:9px;} .topnav-sport{display:none;} .topnav-account>span:last-child{display:none;} .topnav-tabs{padding:0 16px;gap:22px;} .topnav-tab{font-size:12px;padding:13px 0 11px;} .workspace-context-inner{padding:12px 16px;align-items:flex-start;} .context-league{flex-wrap:wrap;gap:4px 8px;min-width:0;} .context-label{width:100%;} .context-team,.context-divider{display:none;} .context-status{padding-top:3px;font-size:8px;gap:6px;} .topnav-main{padding:20px 16px 36px;} .product-footer{margin:0 16px;flex-wrap:wrap;} .product-footer>span:last-child{display:none;} }

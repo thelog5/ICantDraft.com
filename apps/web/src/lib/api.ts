@@ -1,9 +1,11 @@
+import { getActiveContext } from './activeContext';
+import { demoResponse } from './demo';
 // Normalize API base URL (remove trailing slashes)
 const getApiBaseUrl = () => {
   const base = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "https://i-cant-draft-com-api-navy.vercel.app";
   return base.replace(/\/+$/, ''); // Remove trailing slashes
 };
-const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
 
 export type League = {
   id: string;
@@ -134,9 +136,14 @@ export class ApiError extends Error {
 }
 
 
-async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+export async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   try {
-    const response = await fetch(url, options);
+    const context = getActiveContext();
+    const path = new URL(url, window.location.origin).pathname;
+    if (context?.leagueKeyInput === 'sample-demo' && (path.startsWith(`/leagues/${context.leagueId}/`) || path === '/ingest/espn')) {
+      return await demoResponse(url, options) as T;
+    }
+    const response = await fetch(url, { credentials: 'include', ...options, signal: options?.signal ?? AbortSignal.timeout(20000) });
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
@@ -886,7 +893,7 @@ export const api = {
     matchupResultBefore: { wins: number; losses: number; ties: number } | null;
     matchupResultAfter: { wins: number; losses: number; ties: number } | null;
   }> {
-    const response = await fetch(`${API_BASE_URL}/leagues/${leagueId}/streaming/impact`, {
+    return fetchJson(`${API_BASE_URL}/leagues/${leagueId}/streaming/impact`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -896,12 +903,6 @@ export const api = {
         opponentTeamId,
       }),
     });
-
-    if (!response.ok) {
-      throw new ApiError(response.statusText, response.status, await response.text());
-    }
-
-    return response.json();
   },
 
   async getStreamingPlan(leagueId: string, teamId: string, opponentTeamId?: string): Promise<{

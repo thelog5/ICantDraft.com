@@ -138,6 +138,24 @@
   display: inline;
 }
 
+.landing-page .hero-wordmark {
+  position: relative;
+  width: min(100%, 760px);
+  aspect-ratio: 8;
+  overflow: hidden;
+  margin: 0 auto 1.5rem;
+}
+
+.hero-wordmark img {
+  position: absolute;
+  display: block;
+  width: 100%;
+  height: auto;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+}
+
 .title-sub {
   display: inline;
   color: #666;
@@ -200,11 +218,11 @@
   position: absolute;
   top: 0;
   left: 0;
-  border: 3px solid #e03131;
+  border: 0;
 }
 
 /* Sections */
-section {
+.landing-page section {
   padding: 5rem 2rem;
   max-width: 1400px;
   margin: 0 auto;
@@ -377,8 +395,8 @@ section {
 }
 
 .feature-video-placeholder:hover {
-  border-color: #dc2626;
-  background: #fef2f2;
+  border-color: #bdbdbd;
+  background: #fafafa;
 }
 
 .placeholder-label {
@@ -854,3 +872,7 @@ section {
     padding: 2rem;
   }
 }
+/* The supplied wordmark includes transparent space above and below the lettering. */
+.landing-page .nav-brand { width:270px; height:52px; position:relative; overflow:hidden; }
+.landing-page .nav-brand-logo { position:absolute; width:260px; height:auto; top:50%; transform:translateY(-50%); }
+@media(max-width:768px){.landing-page .nav-brand{width:200px;height:42px;}.landing-page .nav-brand-logo{width:195px;}}

@@ -3,7 +3,7 @@
   margin: 0 auto;
 }
 
-.page-header {
+:where(.my-team-analysis) .page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -11,11 +11,11 @@
   gap: 2rem;
 }
 
-.page-header-text {
+:where(.my-team-analysis) .page-header-text {
   flex: 1;
 }
 
-.page-title {
+:where(.my-team-analysis) .page-title {
   font-size: 2rem;
   font-weight: 700;
   color: #111;
@@ -23,13 +23,13 @@
   letter-spacing: -0.75px;
 }
 
-.page-subtitle {
+:where(.my-team-analysis) .page-subtitle {
   font-size: 1rem;
   color: #666;
   font-weight: 500;
 }
 
-.refresh-espn-button {
+:where(.my-team-analysis) .refresh-espn-button {
   padding: 0.625rem 1.25rem;
   background: #dc2626;
   color: white;
@@ -43,38 +43,38 @@
   flex-shrink: 0;
 }
 
-.refresh-espn-button:hover:not(:disabled) {
+:where(.my-team-analysis) .refresh-espn-button:hover:not(:disabled) {
   background: #b91c1c;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
 }
 
-.refresh-espn-button:disabled {
+:where(.my-team-analysis) .refresh-espn-button:disabled {
   background: #ccc;
   cursor: not-allowed;
   transform: none;
 }
 
 /* Roster Table */
-.roster-table-wrapper {
+:where(.my-team-analysis) .roster-table-wrapper {
   overflow-x: auto;
   margin-top: 1rem;
 }
 
-.roster-table {
+:where(.my-team-analysis) .roster-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
 }
 
-.roster-table thead {
+:where(.my-team-analysis) .roster-table thead {
   background-color: #f8f8f8;
   position: sticky;
   top: 0;
   z-index: 10;
 }
 
-.roster-table th {
+:where(.my-team-analysis) .roster-table th {
   padding: 0.875rem 0.75rem;
   text-align: left;
   font-weight: 700;
@@ -85,35 +85,35 @@
   border-bottom: 2px solid #e5e5e5;
 }
 
-.roster-table th.stat-col {
+:where(.my-team-analysis) .roster-table th.stat-col {
   text-align: center;
   width: 60px;
 }
 
-.roster-table tbody tr {
+:where(.my-team-analysis) .roster-table tbody tr {
   border-bottom: 1px solid #e5e5e5;
   transition: background-color 0.15s;
 }
 
-.roster-table tbody tr:hover {
+:where(.my-team-analysis) .roster-table tbody tr:hover {
   background-color: #f8f8f8;
 }
 
-.roster-table td {
+:where(.my-team-analysis) .roster-table td {
   padding: 1rem 0.75rem;
 }
 
-.player-cell {
+:where(.my-team-analysis) .player-cell {
   min-width: 250px;
 }
 
-.player-info-cell {
+:where(.my-team-analysis) .player-info-cell {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.player-headshot-small {
+:where(.my-team-analysis) .player-headshot-small {
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -122,7 +122,7 @@
   flex-shrink: 0;
 }
 
-.player-headshot-large {
+:where(.my-team-analysis) .player-headshot-large {
   width: 64px;
   height: 64px;
   border-radius: 50%;
@@ -131,7 +131,7 @@
   flex-shrink: 0;
 }
 
-.player-headshot-placeholder {
+:where(.my-team-analysis) .player-headshot-placeholder {
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -139,7 +139,7 @@
   flex-shrink: 0;
 }
 
-.player-headshot-placeholder-large {
+:where(.my-team-analysis) .player-headshot-placeholder-large {
   width: 64px;
   height: 64px;
   border-radius: 50%;
@@ -147,31 +147,31 @@
   flex-shrink: 0;
 }
 
-.player-name-wrapper {
+:where(.my-team-analysis) .player-name-wrapper {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.player-name-row {
+:where(.my-team-analysis) .player-name-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
 
-.player-name-cell {
+:where(.my-team-analysis) .player-name-cell {
   font-weight: 600;
   color: #222;
 }
 
-.player-role-reason {
+:where(.my-team-analysis) .player-role-reason {
   font-size: 0.75rem;
   color: #666;
   font-weight: 400;
 }
 
-.player-role-pill {
+:where(.my-team-analysis) .player-role-pill {
   display: inline-block;
   padding: 0.25rem 0.5rem;
   border-radius: 12px;
@@ -182,7 +182,7 @@
   white-space: nowrap;
 }
 
-.player-injury-pill {
+:where(.my-team-analysis) .player-injury-pill {
   display: inline-block;
   padding: 0.25rem 0.5rem;
   border-radius: 12px;
@@ -194,77 +194,77 @@
   margin-right: 0.5rem;
 }
 
-.player-injury-pill.injury-ir {
+:where(.my-team-analysis) .player-injury-pill.injury-ir {
   background-color: #dc2626;
   color: #fff;
 }
 
-.player-injury-pill.injury-out {
+:where(.my-team-analysis) .player-injury-pill.injury-out {
   background-color: #dc2626;
   color: #fff;
 }
 
-.player-injury-pill.injury-dtd {
+:where(.my-team-analysis) .player-injury-pill.injury-dtd {
   background-color: #f59e0b;
   color: #fff;
 }
 
-.player-injury-pill.injury-susp {
+:where(.my-team-analysis) .player-injury-pill.injury-susp {
   background-color: #6b7280;
   color: #fff;
 }
 
-.injury-return-date {
+:where(.my-team-analysis) .injury-return-date {
   display: inline-block;
   margin-left: 0.5rem;
   font-size: 0.75rem;
   color: #999;
 }
 
-.player-role-pill.role-green {
+:where(.my-team-analysis) .player-role-pill.role-green {
   background-color: #d4edda;
   color: #155724;
 }
 
-.player-role-pill.role-blue {
+:where(.my-team-analysis) .player-role-pill.role-blue {
   background-color: #cce5ff;
   color: #004085;
 }
 
-.player-role-pill.role-yellow {
+:where(.my-team-analysis) .player-role-pill.role-yellow {
   background-color: #fff3cd;
   color: #856404;
 }
 
-.player-role-pill.role-red {
+:where(.my-team-analysis) .player-role-pill.role-red {
   background-color: #f8d7da;
   color: #721c24;
 }
 
-.player-role-pill.role-gray {
+:where(.my-team-analysis) .player-role-pill.role-gray {
   background-color: #e9ecef;
   color: #495057;
 }
 
-.position-cell {
+:where(.my-team-analysis) .position-cell {
   color: #666;
   font-size: 0.8125rem;
 }
 
-.stat-col {
+:where(.my-team-analysis) .stat-col {
   text-align: center;
   font-weight: 600;
   color: #222;
 }
 
-.stat-col.estimated {
+:where(.my-team-analysis) .stat-col.estimated {
   color: #999;
   font-size: 0.75rem;
   font-style: italic;
   font-weight: 500;
 }
 
-.roster-note {
+:where(.my-team-analysis) .roster-note {
   margin-top: 1rem;
   padding: 0.875rem;
   background-color: #f8f9fa;
@@ -273,21 +273,21 @@
   text-align: center;
 }
 
-.roster-note small {
+:where(.my-team-analysis) .roster-note small {
   font-size: 0.8125rem;
   line-height: 1.5;
   color: #666;
 }
 
 /* Strengths & Weaknesses */
-.strengths-weaknesses-grid {
+:where(.my-team-analysis) .strengths-weaknesses-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
   margin-top: 1.5rem;
 }
 
-.section-label {
+:where(.my-team-analysis) .section-label {
   font-size: 1rem;
   font-weight: 700;
   color: #333;
@@ -296,13 +296,13 @@
   letter-spacing: 0.5px;
 }
 
-.category-badges {
+:where(.my-team-analysis) .category-badges {
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
 }
 
-.category-badge {
+:where(.my-team-analysis) .category-badge {
   flex: 1;
   min-width: 140px;
   padding: 1.5rem 1.25rem;
@@ -315,27 +315,27 @@
   transition: all 0.2s;
 }
 
-.category-badge.strength {
+:where(.my-team-analysis) .category-badge.strength {
   background-color: #e8f5ed;
-  border: 2px solid #00a651;
+  border: 2px solid #23734d;
 }
 
-.category-badge.strength:hover {
+:where(.my-team-analysis) .category-badge.strength:hover {
   transform: translateY(-2px);
   box-shadow: 0 2px 8px rgba(0, 166, 81, 0.15);
 }
 
-.category-badge.weakness {
+:where(.my-team-analysis) .category-badge.weakness {
   background-color: #ffe5e5;
-  border: 2px solid #e31837;
+  border: 2px solid #b83b46;
 }
 
-.category-badge.weakness:hover {
+:where(.my-team-analysis) .category-badge.weakness:hover {
   transform: translateY(-2px);
   box-shadow: 0 2px 8px rgba(227, 24, 55, 0.15);
 }
 
-.badge-category {
+:where(.my-team-analysis) .badge-category {
   font-size: 1.25rem;
   font-weight: 700;
   color: #222;
@@ -343,7 +343,7 @@
   letter-spacing: 0.5px;
 }
 
-.badge-detail {
+:where(.my-team-analysis) .badge-detail {
   font-size: 1.75rem;
   font-weight: 900;
   line-height: 1;
@@ -351,16 +351,16 @@
   color: #222;
 }
 
-.category-badge.strength .badge-detail {
+:where(.my-team-analysis) .category-badge.strength .badge-detail {
   color: #222;
 }
 
-.category-badge.weakness .badge-detail {
+:where(.my-team-analysis) .category-badge.weakness .badge-detail {
   color: #222;
 }
 
 /* Punt Strategy */
-.punt-explanation {
+:where(.my-team-analysis) .punt-explanation {
   margin-top: 1rem;
   color: #666;
   line-height: 1.6;
@@ -368,42 +368,42 @@
 }
 
 /* Modern Punt Explanation Box */
-.punt-explanation-box {
+:where(.my-team-analysis) .punt-explanation-box {
   display: flex;
   gap: 1.25rem;
   padding: 1.5rem;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 2px solid #bae6fd;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   margin-top: 1rem;
   margin-bottom: 1.5rem;
 }
 
-.punt-explanation-icon {
+:where(.my-team-analysis) .punt-explanation-icon {
   font-size: 2rem;
   flex-shrink: 0;
   line-height: 1;
 }
 
-.punt-explanation-content {
+:where(.my-team-analysis) .punt-explanation-content {
   flex: 1;
 }
 
-.punt-explanation-title {
+:where(.my-team-analysis) .punt-explanation-title {
   font-size: 1.125rem;
   font-weight: 700;
   color: #0c4a6e;
   margin: 0 0 0.75rem 0;
 }
 
-.punt-explanation-text {
+:where(.my-team-analysis) .punt-explanation-text {
   font-size: 0.9375rem;
   color: #1e293b;
   line-height: 1.6;
   margin: 0 0 0.75rem 0;
 }
 
-.punt-explanation-warning {
+:where(.my-team-analysis) .punt-explanation-warning {
   font-size: 0.875rem;
   color: #78350f;
   line-height: 1.5;
@@ -415,8 +415,8 @@
 }
 
 /* Section Subtitles */
-.punt-section-subtitle,
-.focus-section-subtitle {
+:where(.my-team-analysis) .punt-section-subtitle,
+:where(.my-team-analysis) .focus-section-subtitle {
   font-size: 0.875rem;
   color: #666;
   margin-bottom: 1rem;
@@ -425,16 +425,16 @@
 }
 
 /* Modern Punt/Focus Badges */
-.punt-badges-modern,
-.focus-badges-modern {
+:where(.my-team-analysis) .punt-badges-modern,
+:where(.my-team-analysis) .focus-badges-modern {
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
   margin-bottom: 1rem;
 }
 
-.punt-badge-modern,
-.focus-badge-modern {
+:where(.my-team-analysis) .punt-badge-modern,
+:where(.my-team-analysis) .focus-badge-modern {
   flex: 1;
   min-width: 140px;
   padding: 1.5rem 1.25rem;
@@ -447,27 +447,27 @@
   transition: all 0.2s;
 }
 
-.punt-badge-modern {
+:where(.my-team-analysis) .punt-badge-modern {
   background-color: #ffe5e5;
-  border: 2px solid #e31837;
+  border: 2px solid #b83b46;
 }
 
-.punt-badge-modern:hover {
+:where(.my-team-analysis) .punt-badge-modern:hover {
   transform: translateY(-2px);
   box-shadow: 0 2px 8px rgba(227, 24, 55, 0.15);
 }
 
-.focus-badge-modern {
+:where(.my-team-analysis) .focus-badge-modern {
   background-color: #e8f5ed;
-  border: 2px solid #00a651;
+  border: 2px solid #23734d;
 }
 
-.focus-badge-modern:hover {
+:where(.my-team-analysis) .focus-badge-modern:hover {
   transform: translateY(-2px);
   box-shadow: 0 2px 8px rgba(0, 166, 81, 0.15);
 }
 
-.badge-rank-large {
+:where(.my-team-analysis) .badge-rank-large {
   font-size: 2.5rem;
   font-weight: 900;
   color: #222;
@@ -475,11 +475,11 @@
   letter-spacing: -1px;
 }
 
-.badge-rank-large.strength {
+:where(.my-team-analysis) .badge-rank-large.strength {
   color: #222;
 }
 
-.badge-category-large {
+:where(.my-team-analysis) .badge-category-large {
   font-size: 1.25rem;
   font-weight: 700;
   color: #222;
@@ -487,21 +487,21 @@
   letter-spacing: 0.5px;
 }
 
-.badge-total-teams {
+:where(.my-team-analysis) .badge-total-teams {
   font-size: 0.8125rem;
   color: #666;
   font-weight: 500;
 }
 
-.punt-strategy-grid {
+:where(.my-team-analysis) .punt-strategy-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
   margin-top: 1.5rem;
 }
 
-.punt-section-title,
-.focus-section-title {
+:where(.my-team-analysis) .punt-section-title,
+:where(.my-team-analysis) .focus-section-title {
   font-size: 0.9375rem;
   font-weight: 700;
   color: #333;
@@ -510,93 +510,93 @@
   letter-spacing: 0.5px;
 }
 
-.punt-badges,
-.focus-badges {
+:where(.my-team-analysis) .punt-badges,
+:where(.my-team-analysis) .focus-badges {
   display: flex;
   flex-direction: column;
   gap: 0.875rem;
   margin-bottom: 1rem;
 }
 
-.punt-badge {
+:where(.my-team-analysis) .punt-badge {
   padding: 1rem 1.25rem;
-  background: linear-gradient(135deg, #fff4e5 0%, #fff9f0 100%);
-  border: 2px solid #ffd699;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
 }
 
-.focus-badge {
+:where(.my-team-analysis) .focus-badge {
   padding: 1rem 1.25rem;
-  background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%);
-  border: 2px solid #90caf9;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
 }
 
-.punt-badge-category,
-.focus-badge-category {
+:where(.my-team-analysis) .punt-badge-category,
+:where(.my-team-analysis) .focus-badge-category {
   font-size: 1.125rem;
   font-weight: 700;
   color: #222;
   margin-bottom: 0.5rem;
 }
 
-.punt-badge-reason,
-.focus-badge-reason {
+:where(.my-team-analysis) .punt-badge-reason,
+:where(.my-team-analysis) .focus-badge-reason {
   font-size: 0.8125rem;
   color: #666;
   font-weight: 500;
 }
 
-.punt-note,
-.focus-note {
+:where(.my-team-analysis) .punt-note,
+:where(.my-team-analysis) .focus-note {
   font-size: 0.8125rem;
   color: #666;
   line-height: 1.5;
   font-style: italic;
 }
 
-.empty-state {
+:where(.my-team-analysis) .empty-state {
   padding: 3rem 2rem;
   text-align: center;
   color: #666;
 }
 
 @media (max-width: 1024px) {
-  .strengths-weaknesses-grid,
-  .punt-strategy-grid {
+  :where(.my-team-analysis) .strengths-weaknesses-grid,
+  :where(.my-team-analysis) .punt-strategy-grid {
     grid-template-columns: 1fr;
     gap: 1.5rem;
   }
 
-  .roster-table {
+  :where(.my-team-analysis) .roster-table {
     font-size: 0.8125rem;
   }
 
-  .roster-table th {
+  :where(.my-team-analysis) .roster-table th {
     padding: 0.75rem 0.5rem;
   }
 
-  .roster-table td {
+  :where(.my-team-analysis) .roster-table td {
     padding: 0.875rem 0.5rem;
   }
 }
 
 @media (max-width: 768px) {
-  .page-title {
+  :where(.my-team-analysis) .page-title {
     font-size: 1.5rem;
   }
 
-  .roster-table th.stat-col {
+  :where(.my-team-analysis) .roster-table th.stat-col {
     width: 50px;
     padding: 0.75rem 0.25rem;
   }
 
-  .stat-col {
+  :where(.my-team-analysis) .stat-col {
     padding: 0.875rem 0.25rem;
   }
 
-  .player-headshot-small,
-  .player-headshot-placeholder {
+  :where(.my-team-analysis) .player-headshot-small,
+  :where(.my-team-analysis) .player-headshot-placeholder {
     width: 40px;
     height: 40px;
   }

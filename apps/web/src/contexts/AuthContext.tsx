@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../lib/api';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface AuthContextType {
@@ -25,8 +26,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch('http://localhost:3001/auth/me', {
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
         credentials: 'include',
+        signal: AbortSignal.timeout(20000),
       });
 
       if (!response.ok) {
@@ -57,9 +59,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch('http://localhost:3001/auth/logout', {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
+        signal: AbortSignal.timeout(20000),
       });
 
       setAuthenticated(false);

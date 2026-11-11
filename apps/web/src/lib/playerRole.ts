@@ -101,7 +101,7 @@ type PlayerScores = {
 export function getPlayerRole(
   player: PlayerWithStats,
   teamProfile: TeamProfile,
-  leagueAverage: TeamProfile["leagueAverage"],
+  _leagueAverage: TeamProfile["leagueAverage"],
   allPlayers: PlayerWithStats[]
 ): PlayerRole {
   // Safety checks
@@ -132,17 +132,15 @@ export function getPlayerRole(
     };
   }
 
-  const leagueAvgPerGame = {
-    pts: (leagueAverage.pts || 0) / 82,
-    reb: (leagueAverage.reb || 0) / 82,
-    ast: (leagueAverage.ast || 0) / 82,
-    stl: (leagueAverage.stl || 0) / 82,
-    blk: (leagueAverage.blk || 0) / 82,
-    threes: (leagueAverage.threes || 0) / 82,
-    tov: (leagueAverage.tov || 0) / 82,
-    fgPct: leagueAverage.fgPct || 0,
-    ftPct: leagueAverage.ftPct || 0,
-  };
+  // Compare players with other players on this roster. Team season totals / 82
+  // is not a player baseline and badly distorts short-season evaluations.
+  const eligible = allPlayers.filter(p => p.stats.totals.gp >= 3);
+  const leagueAvgPerGame = Object.fromEntries(
+    (['pts','reb','ast','stl','blk','threes','tov','fgPct','ftPct'] as CategoryKey[]).map(cat => [cat,
+      eligible.length ? eligible.reduce((sum, p) => sum + p.stats.perGame[cat], 0) / eligible.length : player.stats.perGame[cat]
+    ])
+  ) as Record<CategoryKey, number>;
+
 
   // Identify team's focus categories (top 3-4 by z-score, excluding TOV)
   const teamFocusCategories: CategoryKey[] = Object.entries(teamProfile.profile.zScores)
@@ -304,7 +302,7 @@ function calculatePlayerScores(
       const impact = (leagueAvg - playerValue) / Math.max(leagueAvg, 1);
       overallValueScore += impact;
     } else if (cat === "fgPct" || cat === "ftPct") {
-      const attempts = cat === "fgPct" ? player.stats.totals.fga : player.stats.totals.fta;
+      const attempts = cat === "fgPct" ? player.stats.totals.fga / Math.max(1, player.stats.totals.gp) : player.stats.totals.fta / Math.max(1, player.stats.totals.gp);
       const impact = (playerValue - leagueAvg) * Math.min(attempts / 10, 2);
       overallValueScore += impact;
     } else {
@@ -319,10 +317,10 @@ function calculatePlayerScores(
     const playerValue = perGame[cat];
     const leagueAvg = leagueAvgPerGame[cat];
     const teamZScore = teamProfile.profile.zScores[cat];
-    const weight = Math.abs(teamZScore) + 1.0; // Higher weight for stronger team categories
+    const weight = 1 + Math.min(1, Math.abs(teamZScore)); // Higher weight for stronger team categories
 
     if (cat === "fgPct" || cat === "ftPct") {
-      const attempts = cat === "fgPct" ? player.stats.totals.fga : player.stats.totals.fta;
+      const attempts = cat === "fgPct" ? player.stats.totals.fga / Math.max(1, player.stats.totals.gp) : player.stats.totals.fta / Math.max(1, player.stats.totals.gp);
       const impact = (playerValue - leagueAvg) * Math.min(attempts / 10, 2);
       teamFitScore += impact * weight;
     } else {
@@ -347,10 +345,10 @@ function calculatePlayerScores(
     const playerValue = perGame[cat];
     const teamMedian = teamMedians[cat];
     const teamZScore = teamProfile.profile.zScores[cat];
-    const weight = Math.abs(teamZScore) + 1.0;
+    const weight = 1 + Math.min(1, Math.abs(teamZScore));
 
     if (cat === "fgPct" || cat === "ftPct") {
-      const attempts = cat === "fgPct" ? player.stats.totals.fga : player.stats.totals.fta;
+      const attempts = cat === "fgPct" ? player.stats.totals.fga / Math.max(1, player.stats.totals.gp) : player.stats.totals.fta / Math.max(1, player.stats.totals.gp);
       if (attempts > 0 && playerValue < teamMedian) {
         const conflict = (teamMedian - playerValue) * Math.min(attempts / 10, 2);
         buildConflictScore += conflict * weight;

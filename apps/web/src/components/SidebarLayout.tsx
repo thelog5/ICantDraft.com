@@ -1,3 +1,4 @@
+import Icon from "./Icon";
 import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
@@ -48,7 +49,7 @@ export default function SidebarLayout({
       <aside className="sidebar">
         <div className="sidebar-header">
           <Link to="/" className="sidebar-logo">
-            <span className="logo-icon">🏀</span>
+            <span className="logo-icon"><Icon name="ball" size={24} /></span>
             <span className="logo-text">ICantDraft.com</span>
           </Link>
         </div>

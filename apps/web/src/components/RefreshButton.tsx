@@ -38,7 +38,7 @@ export default function RefreshButton({ onSuccess }: RefreshButtonProps) {
         disabled={loading}
         className="refresh-button"
       >
-        {loading ? "Refreshing..." : "🔄 Refresh ESPN Data"}
+        {loading ? "Refreshing..." : "Refresh ESPN Data"}
       </button>
       {message && (
         <div

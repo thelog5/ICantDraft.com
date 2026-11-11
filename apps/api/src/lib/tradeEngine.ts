@@ -273,28 +273,9 @@ export function calculateTradeGrade(
   avgPlacementDelta: number,
   categoryDeltas?: Record<NineCategory, number>
 ): string {
-  const placementScore = -avgPlacementDelta;
-  let adjustedTeamScoreDelta = teamScoreDelta;
-  
-  // If categoryDeltas provided, cap FG%/FT% contributions to prevent overweighting
-  if (categoryDeltas) {
-    const fgDelta = categoryDeltas.fgPct ?? 0;
-    const ftDelta = categoryDeltas.ftPct ?? 0;
-    
-    // Cap FG%/FT% deltas at ±0.3 (roughly ±3 percentage points worth of Z-score impact)
-    // This prevents single-category dominance from shooting percentages
-    const fgCapped = Math.max(-0.3, Math.min(0.3, fgDelta));
-    const ftCapped = Math.max(-0.3, Math.min(0.3, ftDelta));
-    
-    // If original had larger contribution, reduce team score delta proportionally
-    const fgReduction = Math.abs(fgDelta) - Math.abs(fgCapped);
-    const ftReduction = Math.abs(ftDelta) - Math.abs(ftCapped);
-    const totalReduction = (fgReduction + ftReduction) / 9.0; // Divide by 9 categories
-    
-    adjustedTeamScoreDelta = teamScoreDelta - (Math.sign(teamScoreDelta) * totalReduction);
-  }
-  
-  const score = 0.7 * adjustedTeamScoreDelta + 0.3 * placementScore;
+  // Score deltas are already the sum of nine equally weighted category percentiles.
+  // Mixing rank movement and raw z-score deltas here counted the same gain twice.
+  const score = Number.isFinite(teamScoreDelta) ? teamScoreDelta : 0;
 
   // Harsher penalties for negative outcomes
   if (score >= 0.35) return "A+";
@@ -850,8 +831,8 @@ export function analyzeTrade(
 
   const myZBefore = zScore(myTotals, leagueDistBefore);
   const theirZBefore = zScore(theirTotals, leagueDistBefore);
-  const myZAfter = zScore(myAfterTotals, leagueDistAfter);
-  const theirZAfter = zScore(theirAfterTotals, leagueDistAfter);
+  const myZAfter = zScore(myAfterTotals, leagueDistBefore);
+  const theirZAfter = zScore(theirAfterTotals, leagueDistBefore);
 
   const myScoreBefore = teamScore(myZBefore);
   const theirScoreBefore = teamScore(theirZBefore);
@@ -1040,7 +1021,7 @@ export function scoreTrade(
   if (analysis.deltas.them.teamScoreDelta < -0.08) s -= Math.abs(analysis.deltas.them.teamScoreDelta) * 15;
   else if (analysis.deltas.them.teamScoreDelta < -0.05) s -= Math.abs(analysis.deltas.them.teamScoreDelta) * 12;
   
-  if (analysis.deltas.them.teamScoreDelta > 0.02) s += 5;
+  s += Math.max(0, analysis.deltas.them.teamScoreDelta) * 5;
 
   for (const c of oppWeaknesses) {
     let d = analysis.deltas.them.categoryDelta[c] ?? 0;

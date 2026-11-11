@@ -1,3 +1,4 @@
+import { getActiveContext } from "../lib/activeContext";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import Skeleton from "./Skeleton";
@@ -145,7 +146,7 @@ export default function HomeHeader({ leagueId, myTeamId, onRefresh, refreshing }
               onClick={onRefresh}
               disabled={refreshing}
             >
-              {refreshing ? "Refreshing..." : "Refresh ESPN Data"}
+              {refreshing ? "Refreshing..." : getActiveContext()?.leagueKeyInput === "sample-demo" ? "Reload sample" : "Refresh ESPN Data"}
             </button>
           )}
         </div>

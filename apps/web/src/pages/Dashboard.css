@@ -2,7 +2,7 @@
   width: 100%;
 }
 
-.api-error-banner {
+:where(.dashboard) .api-error-banner {
   background-color: #fff3cd;
   border: 1px solid #ffc107;
   color: #856404;
@@ -32,11 +32,11 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.category-overview-card {
+:where(.dashboard) .category-overview-card {
   grid-column: 1;
 }
 
-.category-overview-description {
+:where(.dashboard) .category-overview-description {
   font-size: 0.875rem;
   color: #666;
   line-height: 1.5;
@@ -44,20 +44,20 @@
   margin-bottom: 1rem;
 }
 
-.category-tiles-grid {
+:where(.dashboard) .category-tiles-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0.875rem;
   margin-top: 1rem;
 }
 
-.team-performance-card {
+:where(.dashboard) .team-performance-card {
   grid-column: 2;
   display: flex;
   flex-direction: column;
 }
 
-.team-performance-description {
+:where(.dashboard) .team-performance-description {
   font-size: 0.875rem;
   color: #666;
   line-height: 1.5;
@@ -65,7 +65,7 @@
   margin-bottom: 1rem;
 }
 
-.team-performance-content {
+:where(.dashboard) .team-performance-content {
   margin-top: 1rem;
   display: flex;
   flex-direction: column;
@@ -73,7 +73,7 @@
   min-height: 0;
 }
 
-.team-performance-chart-section {
+:where(.dashboard) .team-performance-chart-section {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -85,35 +85,35 @@
   padding: 0 1rem;
 }
 
-.team-score-large-display {
+:where(.dashboard) .team-score-large-display {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-width: 200px;
-  background-color: #e6f2ff;
-  border: 3px solid #0066cc;
+  background-color: #f8fafc;
+  border: 1px solid #dbe1e8;
   border-radius: 12px;
   padding: 1.5rem 1.25rem;
 }
 
-.team-score-number-wrapper {
+:where(.dashboard) .team-score-number-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 0.25rem;
 }
 
-.team-score-number {
+:where(.dashboard) .team-score-number {
   font-size: 5.5rem;
   font-weight: 900;
-  color: #0066cc;
+  color: #356b96;
   letter-spacing: -2px;
   line-height: 1;
-  text-shadow: 0 1px 2px rgba(0, 102, 204, 0.1);
+  text-shadow: none;
 }
 
-.team-score-separator {
+:where(.dashboard) .team-score-separator {
   font-size: 1rem;
   color: #999;
   font-weight: 400;
@@ -121,14 +121,14 @@
   text-transform: lowercase;
 }
 
-.team-score-denominator {
+:where(.dashboard) .team-score-denominator {
   font-size: 2.5rem;
   font-weight: 600;
   color: #666;
   line-height: 1;
 }
 
-.team-score-large-label {
+:where(.dashboard) .team-score-large-label {
   font-size: 0.9375rem;
   color: #666;
   font-weight: 600;
@@ -137,7 +137,7 @@
   letter-spacing: 0.5px;
 }
 
-.team-score-explanation {
+:where(.dashboard) .team-score-explanation {
   font-size: 0.8125rem;
   color: #666;
   line-height: 1.5;
@@ -148,11 +148,11 @@
 }
 
 
-.weekly-projections-card {
+:where(.dashboard) .weekly-projections-card {
   grid-column: 1 / -1;
 }
 
-.weekly-projections-description {
+:where(.dashboard) .weekly-projections-description {
   font-size: 0.875rem;
   color: #666;
   line-height: 1.5;
@@ -160,14 +160,14 @@
   margin-bottom: 1rem;
 }
 
-.weekly-matchup-selector {
+:where(.dashboard) .weekly-matchup-selector {
   margin-top: 1rem;
   background-color: #2d2d2d;
   border-radius: 6px;
   overflow: hidden;
 }
 
-.matchup-header-bar {
+:where(.dashboard) .matchup-header-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -175,7 +175,7 @@
   background-color: #2d2d2d;
 }
 
-.matchup-teams {
+:where(.dashboard) .matchup-teams {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -183,7 +183,7 @@
   justify-content: center;
 }
 
-.matchup-team-avatar {
+:where(.dashboard) .matchup-team-avatar {
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -192,7 +192,7 @@
   flex-shrink: 0;
 }
 
-.matchup-team-avatar-placeholder {
+:where(.dashboard) .matchup-team-avatar-placeholder {
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -202,18 +202,18 @@
   display: none; /* Hidden by default, shown on error */
 }
 
-.matchup-team-icon {
+:where(.dashboard) .matchup-team-icon {
   font-size: 1.25rem;
 }
 
-.matchup-my-team {
+:where(.dashboard) .matchup-my-team {
   color: #fff;
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: 0.5px;
 }
 
-.matchup-nav-btn {
+:where(.dashboard) .matchup-nav-btn {
   background: rgba(255, 255, 255, 0.1);
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: 6px;
@@ -235,29 +235,29 @@
   position: relative;
 }
 
-.matchup-nav-btn > * {
+:where(.dashboard) .matchup-nav-btn > * {
   line-height: 0;
   display: inline-block;
   vertical-align: middle;
 }
 
-.matchup-nav-btn:not(:disabled):hover {
+:where(.dashboard) .matchup-nav-btn:not(:disabled):hover {
   background: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.5);
   color: #fff;
   transform: scale(1.05);
 }
 
-.matchup-nav-btn:not(:disabled):active {
+:where(.dashboard) .matchup-nav-btn:not(:disabled):active {
   transform: scale(0.98);
 }
 
-.matchup-nav-btn:disabled {
+:where(.dashboard) .matchup-nav-btn:disabled {
   cursor: not-allowed;
   opacity: 0.3;
 }
 
-.matchup-score-bar {
+:where(.dashboard) .matchup-score-bar {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -267,28 +267,28 @@
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.matchup-score {
+:where(.dashboard) .matchup-score {
   font-size: 1.5rem;
   font-weight: 700;
   color: #fff;
 }
 
-.matchup-league-avg {
+:where(.dashboard) .matchup-league-avg {
   font-size: 0.875rem;
   color: #666;
 }
 
-.matchup-opponent-info {
+:where(.dashboard) .matchup-opponent-info {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.matchup-opponent-avatar-wrapper {
+:where(.dashboard) .matchup-opponent-avatar-wrapper {
   position: relative;
 }
 
-.matchup-opponent-avatar {
+:where(.dashboard) .matchup-opponent-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -297,7 +297,7 @@
   flex-shrink: 0;
 }
 
-.matchup-opponent-avatar-placeholder {
+:where(.dashboard) .matchup-opponent-avatar-placeholder {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -306,68 +306,68 @@
   flex-shrink: 0;
 }
 
-.matchup-opponent-name {
+:where(.dashboard) .matchup-opponent-name {
   font-size: 0.875rem;
   color: #1f1d1d;
   font-weight: 500;
 }
 
-.weekly-projections-header {
+:where(.dashboard) .weekly-projections-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
 }
 
-.matchup-header {
+:where(.dashboard) .matchup-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.matchup-team {
+:where(.dashboard) .matchup-team {
   font-weight: 600;
   color: #222;
 }
 
-.matchup-vs {
+:where(.dashboard) .matchup-vs {
   color: #666;
   font-size: 0.875rem;
 }
 
-.weekly-projections-content {
+:where(.dashboard) .weekly-projections-content {
   margin-top: 1rem;
 }
 
-.weekly-score {
+:where(.dashboard) .weekly-score {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
 }
 
-.weekly-score-label {
+:where(.dashboard) .weekly-score-label {
   font-size: 0.9375rem;
   color: #666;
 }
 
-.weekly-score-value {
+:where(.dashboard) .weekly-score-value {
   font-size: 1.25rem;
   font-weight: 700;
   color: #222;
 }
 
-.weekly-league-avg {
+:where(.dashboard) .weekly-league-avg {
   font-size: 0.875rem;
   color: #666;
   margin-bottom: 1rem;
 }
 
-.weekly-chart-container {
+:where(.dashboard) .weekly-chart-container {
   margin-top: 1rem;
 }
 
-.weekly-chart-note {
+:where(.dashboard) .weekly-chart-note {
   font-size: 0.75rem;
   color: #999;
   text-align: center;
@@ -375,19 +375,19 @@
   font-style: italic;
 }
 
-.trade-suggestions-card {
+:where(.dashboard) .trade-suggestions-card {
   grid-column: 1 / -1;
 }
 
-.trade-suggestions-header {
+:where(.dashboard) .trade-suggestions-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.view-all-button {
+:where(.dashboard) .view-all-button {
   padding: 0.5rem 1rem;
-  background-color: #0066cc;
+  background-color: #356b96;
   color: #fff;
   border: none;
   border-radius: 4px;
@@ -397,23 +397,23 @@
   transition: background-color 0.2s;
 }
 
-.view-all-button:hover:not(:disabled) {
+:where(.dashboard) .view-all-button:hover:not(:disabled) {
   background-color: #0052a3;
 }
 
-.view-all-button:disabled {
+:where(.dashboard) .view-all-button:disabled {
   background-color: #ccc;
   cursor: not-allowed;
 }
 
-.trade-suggestions-grid {
+:where(.dashboard) .trade-suggestions-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
   margin-top: 1rem;
 }
 
-.trade-suggestion-placeholder {
+:where(.dashboard) .trade-suggestion-placeholder {
   background-color: #f8f8f8;
   border: 2px dashed #d0d0d0;
   border-radius: 6px;
@@ -425,12 +425,12 @@
   gap: 0.75rem;
 }
 
-.trade-placeholder-icon {
+:where(.dashboard) .trade-placeholder-icon {
   font-size: 2.5rem;
   opacity: 0.5;
 }
 
-.trade-placeholder-text {
+:where(.dashboard) .trade-placeholder-text {
   color: #666;
   font-size: 0.9375rem;
   font-weight: 500;
@@ -438,106 +438,106 @@
   margin: 0;
 }
 
-.trade-placeholder-subtext {
+:where(.dashboard) .trade-placeholder-subtext {
   color: #999;
   font-size: 0.8125rem;
   font-style: italic;
   margin: 0;
 }
 
-.trade-suggestions-empty {
+:where(.dashboard) .trade-suggestions-empty {
   margin-top: 1rem;
   padding: 3rem 2rem;
   text-align: center;
 }
 
-.empty-state-text {
+:where(.dashboard) .empty-state-text {
   color: #666;
   font-size: 0.9375rem;
   line-height: 1.6;
 }
 
-.trade-suggestion-item {
+:where(.dashboard) .trade-suggestion-item {
   border: 1px solid #e0e0e0;
   border-radius: 4px;
   padding: 1rem;
   background-color: #f9f9f9;
 }
 
-.trade-suggestion-header {
+:where(.dashboard) .trade-suggestion-header {
   margin-bottom: 0.75rem;
 }
 
-.trade-suggestion-team {
+:where(.dashboard) .trade-suggestion-team {
   font-weight: 600;
   color: #222;
   font-size: 0.9375rem;
 }
 
-.trade-suggestion-details {
+:where(.dashboard) .trade-suggestion-details {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.trade-away,
-.trade-get {
+:where(.dashboard) .trade-away,
+:where(.dashboard) .trade-get {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.trade-label {
+:where(.dashboard) .trade-label {
   font-size: 0.875rem;
   color: #666;
   min-width: 80px;
 }
 
-.trade-player {
+:where(.dashboard) .trade-player {
   font-weight: 500;
   color: #222;
 }
 
-.trade-player.highlight {
-  color: #0066cc;
+:where(.dashboard) .trade-player.highlight {
+  color: #356b96;
   font-weight: 600;
 }
 
-.trade-impact {
+:where(.dashboard) .trade-impact {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
 
-.impact-badge {
+:where(.dashboard) .impact-badge {
   padding: 0.25rem 0.5rem;
   border-radius: 3px;
   font-size: 0.75rem;
   font-weight: 600;
 }
 
-.impact-badge.gain {
-  background-color: #00a651;
+:where(.dashboard) .impact-badge.gain {
+  background-color: #23734d;
   color: #fff;
 }
 
-.impact-badge.loss {
-  background-color: #e31837;
+:where(.dashboard) .impact-badge.loss {
+  background-color: #b83b46;
   color: #fff;
 }
 
-.trade-suggestions-note {
+:where(.dashboard) .trade-suggestions-note {
   font-size: 0.75rem;
   color: #999;
   margin-top: 1rem;
   font-style: italic;
 }
 
-.trade-suggestions-button {
+:where(.dashboard) .trade-suggestions-button {
   margin-top: 1rem;
   padding: 0.5rem 1rem;
-  background-color: #0066cc;
+  background-color: #356b96;
   color: #fff;
   border: none;
   border-radius: 4px;
@@ -547,11 +547,11 @@
   transition: background-color 0.2s;
 }
 
-.trade-suggestions-button:hover {
+:where(.dashboard) .trade-suggestions-button:hover {
   background-color: #0052a3;
 }
 
-.team-analysis-list {
+:where(.dashboard) .team-analysis-list {
   margin-top: 1rem;
   display: flex;
   flex-direction: column;
@@ -561,7 +561,7 @@
   overflow: hidden;
 }
 
-.team-analysis-item {
+:where(.dashboard) .team-analysis-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -571,22 +571,22 @@
   transition: background-color 0.2s;
 }
 
-.team-analysis-item:last-child {
+:where(.dashboard) .team-analysis-item:last-child {
   border-bottom: none;
 }
 
-.team-analysis-item:hover {
+:where(.dashboard) .team-analysis-item:hover {
   background-color: #f8f8f8;
 }
 
-.player-info {
+:where(.dashboard) .player-info {
   display: flex;
   align-items: center;
   gap: 1rem;
   flex: 1;
 }
 
-.player-headshot {
+:where(.dashboard) .player-headshot {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -595,26 +595,26 @@
   background-color: #f0f0f0;
 }
 
-.player-details {
+:where(.dashboard) .player-details {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
 
-.player-name {
+:where(.dashboard) .player-name {
   font-weight: 600;
   color: #222;
   font-size: 1rem;
 }
 
-.player-meta-row {
+:where(.dashboard) .player-meta-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
 
-.player-role {
+:where(.dashboard) .player-role {
   font-size: 0.8125rem;
   padding: 0.25rem 0.625rem;
   border-radius: 3px;
@@ -623,7 +623,7 @@
   font-weight: 600;
 }
 
-.player-positions {
+:where(.dashboard) .player-positions {
   font-size: 0.75rem;
   color: #666;
   font-weight: 500;
@@ -632,49 +632,49 @@
   border-radius: 3px;
 }
 
-.player-role.core {
+:where(.dashboard) .player-role.core {
   background-color: #e8f5ed;
-  color: #00a651;
+  color: #23734d;
 }
 
-.player-role.specialist {
+:where(.dashboard) .player-role.specialist {
   background-color: #e8f5ed;
-  color: #00a651;
+  color: #23734d;
 }
 
-.player-role.expendable {
+:where(.dashboard) .player-role.expendable {
   background-color: #fff4e5;
   color: #d97706;
 }
 
-.player-role.conflict {
+:where(.dashboard) .player-role.conflict {
   background-color: #fee;
-  color: #e31837;
+  color: #b83b46;
 }
 
-.player-role.roster {
+:where(.dashboard) .player-role.roster {
   background-color: #f3f3f3;
   color: #666;
 }
 
-.player-role.low-impact {
+:where(.dashboard) .player-role.low-impact {
   background-color: #f5f5f5;
   color: #999;
 }
 
-.player-positions {
+:where(.dashboard) .player-positions {
   font-size: 0.8125rem;
   color: #666;
   font-weight: 500;
 }
 
-.team-analysis-empty {
+:where(.dashboard) .team-analysis-empty {
   margin-top: 1rem;
   padding: 2rem;
   text-align: center;
 }
 
-.player-rating {
+:where(.dashboard) .player-rating {
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -682,46 +682,46 @@
   font-size: 1.125rem;
 }
 
-.player-rating.positive {
-  color: #00a651;
+:where(.dashboard) .player-rating.positive {
+  color: #23734d;
 }
 
-.player-rating.negative {
-  color: #e31837;
+:where(.dashboard) .player-rating.negative {
+  color: #b83b46;
 }
 
-.player-rating-icon {
+:where(.dashboard) .player-rating-icon {
   font-size: 1.25rem;
 }
 
-.team-analysis-note {
+:where(.dashboard) .team-analysis-note {
   font-size: 0.75rem;
   color: #999;
   margin-top: 1rem;
   font-style: italic;
 }
 
-.team-analysis-card {
+:where(.dashboard) .team-analysis-card {
   grid-column: 1;
 }
 
-.streaming-pickups-card {
+:where(.dashboard) .streaming-pickups-card {
   grid-column: 2;
 }
 
-.streaming-pickups-content {
+:where(.dashboard) .streaming-pickups-content {
   padding: 2rem;
   text-align: center;
 }
 
-.streaming-pickups-placeholder {
+:where(.dashboard) .streaming-pickups-placeholder {
   color: #666;
   font-size: 1rem;
   line-height: 1.6;
 }
 
 /* Trade Suggestion Item Styles */
-.trade-suggestion-header-row {
+:where(.dashboard) .trade-suggestion-header-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -730,7 +730,7 @@
   border-bottom: 1px solid #e5e5e5;
 }
 
-.trade-partner-avatar {
+:where(.dashboard) .trade-partner-avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -739,13 +739,13 @@
   flex-shrink: 0;
 }
 
-.trade-partner-avatar-placeholder {
+:where(.dashboard) .trade-partner-avatar-placeholder {
   width: 40px;
   height: 40px;
   border-radius: 50%;
   background-color: #e8f5ed;
-  border: 2px solid #00a651;
-  color: #00a651;
+  border: 2px solid #23734d;
+  color: #23734d;
   font-weight: 700;
   font-size: 0.875rem;
   display: flex;
@@ -755,14 +755,14 @@
   text-transform: uppercase;
 }
 
-.trade-suggestion-partner {
+:where(.dashboard) .trade-suggestion-partner {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   flex: 1;
 }
 
-.trade-partner-label {
+:where(.dashboard) .trade-partner-label {
   font-size: 0.75rem;
   color: #999;
   text-transform: uppercase;
@@ -770,13 +770,13 @@
   font-weight: 600;
 }
 
-.trade-partner-name {
+:where(.dashboard) .trade-partner-name {
   font-size: 0.9375rem;
   color: #222;
   font-weight: 600;
 }
 
-.trade-suggestion-impact-badge {
+:where(.dashboard) .trade-suggestion-impact-badge {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -786,20 +786,20 @@
   border: 1px solid #e5e5e5;
 }
 
-.trade-score {
+:where(.dashboard) .trade-score {
   font-size: 1.125rem;
   font-weight: 700;
 }
 
-.trade-score.positive {
-  color: #00a651;
+:where(.dashboard) .trade-score.positive {
+  color: #23734d;
 }
 
-.trade-score.negative {
-  color: #e31837;
+:where(.dashboard) .trade-score.negative {
+  color: #b83b46;
 }
 
-.trade-grade {
+:where(.dashboard) .trade-grade {
   font-size: 0.875rem;
   font-weight: 600;
   color: #666;
@@ -808,21 +808,21 @@
   border-radius: 3px;
 }
 
-.trade-suggestion-players {
+:where(.dashboard) .trade-suggestion-players {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.trade-send-section,
-.trade-receive-section {
+:where(.dashboard) .trade-send-section,
+:where(.dashboard) .trade-receive-section {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.trade-section-label {
+:where(.dashboard) .trade-section-label {
   font-size: 0.75rem;
   color: #999;
   text-transform: uppercase;
@@ -831,13 +831,13 @@
   margin-bottom: 0.25rem;
 }
 
-.trade-players-list {
+:where(.dashboard) .trade-players-list {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.trade-player-item {
+:where(.dashboard) .trade-player-item {
   display: flex;
   align-items: center;
   gap: 0.625rem;
@@ -847,7 +847,7 @@
   border-radius: 4px;
 }
 
-.trade-player-headshot {
+:where(.dashboard) .trade-player-headshot {
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -857,7 +857,7 @@
   background-color: #f0f0f0;
 }
 
-.trade-player-headshot-placeholder {
+:where(.dashboard) .trade-player-headshot-placeholder {
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -873,20 +873,20 @@
   text-transform: uppercase;
 }
 
-.trade-player-name {
+:where(.dashboard) .trade-player-name {
   font-size: 0.875rem;
   color: #222;
   font-weight: 500;
 }
 
-.trade-arrow-large {
+:where(.dashboard) .trade-arrow-large {
   font-size: 1.5rem;
   color: #999;
   flex-shrink: 0;
 }
 
-.trade-suggestions-loading,
-.streaming-suggestions-loading {
+:where(.dashboard) .trade-suggestions-loading,
+:where(.dashboard) .streaming-suggestions-loading {
   padding: 2rem;
   text-align: center;
   color: #666;
@@ -894,14 +894,14 @@
 }
 
 /* Streaming Suggestion Styles */
-.streaming-suggestions-header {
+:where(.dashboard) .streaming-suggestions-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
 }
 
-.streaming-suggestions-list {
+:where(.dashboard) .streaming-suggestions-list {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -910,28 +910,28 @@
   overflow: hidden;
 }
 
-.streaming-suggestion-item {
+:where(.dashboard) .streaming-suggestion-item {
   background-color: #fff;
   border-bottom: 1px solid #e5e5e5;
   transition: background-color 0.2s;
 }
 
-.streaming-suggestion-item:last-child {
+:where(.dashboard) .streaming-suggestion-item:last-child {
   border-bottom: none;
 }
 
-.streaming-suggestion-item:hover {
+:where(.dashboard) .streaming-suggestion-item:hover {
   background-color: #f8f8f8;
 }
 
-.streaming-suggestion-player-info {
+:where(.dashboard) .streaming-suggestion-player-info {
   display: flex;
   align-items: flex-start;
   gap: 1rem;
   padding: 1rem;
 }
 
-.streaming-player-headshot {
+:where(.dashboard) .streaming-player-headshot {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -941,7 +941,7 @@
   background-color: #f0f0f0;
 }
 
-.streaming-player-headshot-placeholder {
+:where(.dashboard) .streaming-player-headshot-placeholder {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -957,36 +957,36 @@
   text-transform: uppercase;
 }
 
-.streaming-suggestion-details {
+:where(.dashboard) .streaming-suggestion-details {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   flex: 1;
 }
 
-.streaming-suggestion-header {
+:where(.dashboard) .streaming-suggestion-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
 }
 
-.streaming-player-name {
+:where(.dashboard) .streaming-player-name {
   font-size: 1rem;
   color: #222;
   font-weight: 600;
 }
 
-.streaming-boosts {
+:where(.dashboard) .streaming-boosts {
   display: flex;
   gap: 0.375rem;
   flex-wrap: wrap;
 }
 
-.streaming-boost-badge {
+:where(.dashboard) .streaming-boost-badge {
   padding: 0.25rem 0.5rem;
   background-color: #e8f5ed;
-  color: #00a651;
+  color: #23734d;
   border-radius: 3px;
   font-size: 0.75rem;
   font-weight: 600;
@@ -994,7 +994,7 @@
   letter-spacing: 0.3px;
 }
 
-.streaming-suggestion-reason {
+:where(.dashboard) .streaming-suggestion-reason {
   font-size: 0.875rem;
   color: #666;
   line-height: 1.5;
@@ -1029,13 +1029,13 @@
   border-bottom: 1px solid #e5e5e5;
 }
 
-.trade-metrics-compact {
+:where(.dashboard) .trade-metrics-compact {
   display: flex;
   gap: 0.75rem;
   align-items: center;
 }
 
-.metric-pill-small {
+:where(.dashboard) .metric-pill-small {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1044,7 +1044,7 @@
   border-radius: 6px;
 }
 
-.metric-label-small {
+:where(.dashboard) .metric-label-small {
   font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -1052,7 +1052,7 @@
   font-weight: 600;
 }
 
-.grade-badge-small {
+:where(.dashboard) .grade-badge-small {
   font-size: 1.125rem;
   font-weight: 700;
   padding: 0.25rem 0.5rem;
@@ -1061,41 +1061,41 @@
   text-align: center;
 }
 
-.grade-badge-small.grade-A {
-  background: #00a651;
+:where(.dashboard) .grade-badge-small.grade-A {
+  background: #23734d;
   color: #fff;
 }
 
-.grade-badge-small.grade-B {
-  background: #0066cc;
+:where(.dashboard) .grade-badge-small.grade-B {
+  background: #356b96;
   color: #fff;
 }
 
-.grade-badge-small.grade-C {
+:where(.dashboard) .grade-badge-small.grade-C {
   background: #ffa500;
   color: #fff;
 }
 
-.grade-badge-small.grade-D,
-.grade-badge-small.grade-F {
-  background: #e31837;
+:where(.dashboard) .grade-badge-small.grade-D,
+:where(.dashboard) .grade-badge-small.grade-F {
+  background: #b83b46;
   color: #fff;
 }
 
-.trade-players-row {
+:where(.dashboard) .trade-players-row {
   display: flex;
   align-items: flex-start;
   gap: 1rem;
 }
 
-.trade-side-compact {
+:where(.dashboard) .trade-side-compact {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.trade-side-label-small {
+:where(.dashboard) .trade-side-label-small {
   font-size: 0.6875rem;
   color: #999;
   text-transform: uppercase;
@@ -1104,7 +1104,7 @@
   margin-bottom: 0.25rem;
 }
 
-.player-compact {
+:where(.dashboard) .player-compact {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1114,7 +1114,7 @@
   border-radius: 4px;
 }
 
-.player-headshot-small {
+:where(.dashboard) .player-headshot-small {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -1124,7 +1124,7 @@
   background-color: #f0f0f0;
 }
 
-.player-headshot-placeholder-small {
+:where(.dashboard) .player-headshot-placeholder-small {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -1140,13 +1140,13 @@
   text-transform: uppercase;
 }
 
-.player-name-small {
+:where(.dashboard) .player-name-small {
   font-size: 0.875rem;
   color: #222;
   font-weight: 500;
 }
 
-.trade-arrow-small {
+:where(.dashboard) .trade-arrow-small {
   font-size: 1.25rem;
   color: #999;
   flex-shrink: 0;
@@ -1273,30 +1273,30 @@
   letter-spacing: 0.3px;
 }
 
-.punt-strategy-card {
+:where(.dashboard) .punt-strategy-card {
   grid-column: 2;
 }
 
-.punt-strategy-content {
+:where(.dashboard) .punt-strategy-content {
   margin-top: 1.25rem;
   background-color: #f8f8f8;
   border-radius: 6px;
   padding: 1.25rem;
 }
 
-.punt-strategy-recommendation,
-.punt-strategy-focus {
+:where(.dashboard) .punt-strategy-recommendation,
+:where(.dashboard) .punt-strategy-focus {
   margin-bottom: 1.25rem;
   padding-bottom: 1.25rem;
   border-bottom: 1px solid #e5e5e5;
 }
 
-.punt-strategy-focus {
+:where(.dashboard) .punt-strategy-focus {
   border-bottom: none;
   padding-bottom: 0;
 }
 
-.punt-strategy-label {
+:where(.dashboard) .punt-strategy-label {
   font-size: 0.875rem;
   font-weight: 700;
   color: #666;
@@ -1306,29 +1306,29 @@
   letter-spacing: 0.5px;
 }
 
-.punt-strategy-categories {
+:where(.dashboard) .punt-strategy-categories {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
 }
 
-.punt-category-badge {
+:where(.dashboard) .punt-category-badge {
   padding: 0.5rem 1rem;
-  background-color: #e31837;
+  background-color: #b83b46;
   color: #fff;
   border-radius: 4px;
   font-weight: 700;
   font-size: 0.9375rem;
 }
 
-.punt-strategy-focus-cats {
+:where(.dashboard) .punt-strategy-focus-cats {
   font-size: 1rem;
   color: #222;
   font-weight: 600;
   line-height: 1.6;
 }
 
-.punt-impact-chart-container {
+:where(.dashboard) .punt-impact-chart-container {
   margin-top: 1.5rem;
   padding: 1rem;
   background-color: #fff;
@@ -1336,7 +1336,7 @@
   border: 1px solid #e5e5e5;
 }
 
-.punt-impact-chart-container h4 {
+:where(.dashboard) .punt-impact-chart-container h4 {
   font-size: 0.875rem;
   font-weight: 700;
   color: #666;
@@ -1350,64 +1350,64 @@
     grid-template-columns: 1fr;
   }
 
-  .category-overview-card,
-  .team-performance-card,
-  .team-analysis-card,
-  .streaming-pickups-card {
+  :where(.dashboard) .category-overview-card,
+  :where(.dashboard) .team-performance-card,
+  :where(.dashboard) .team-analysis-card,
+  :where(.dashboard) .streaming-pickups-card {
     grid-column: 1;
   }
 
-  .trade-suggestions-list {
+  :where(.dashboard) .trade-suggestions-list {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 768px) {
-  .category-tiles-grid {
+  :where(.dashboard) .category-tiles-grid {
     grid-template-columns: repeat(3, 1fr);
   }
 
-  .weekly-projections-header {
+  :where(.dashboard) .weekly-projections-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
   }
 
-  .trade-suggestions-grid {
+  :where(.dashboard) .trade-suggestions-grid {
     grid-template-columns: 1fr;
   }
 
-  .team-performance-chart-section {
+  :where(.dashboard) .team-performance-chart-section {
     flex-direction: column;
     align-items: center;
     gap: 1.5rem;
   }
 
-  .team-score-large-display {
+  :where(.dashboard) .team-score-large-display {
     min-width: auto;
   }
 
-  .team-score-number-wrapper {
+  :where(.dashboard) .team-score-number-wrapper {
     padding: 0.4rem 0.8rem;
   }
 
-  .team-score-number {
+  :where(.dashboard) .team-score-number {
     font-size: 3.5rem;
   }
 
-  .team-score-denominator {
+  :where(.dashboard) .team-score-denominator {
     font-size: 2rem;
   }
 }
 
 @media (max-width: 480px) {
-  .category-tiles-grid {
+  :where(.dashboard) .category-tiles-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 /* Radar Chart Tooltip */
-.radar-tooltip {
+:where(.dashboard) .radar-tooltip {
   background-color: rgba(0, 0, 0, 0.9);
   color: #fff;
   padding: 0.5rem 0.75rem;
@@ -1419,12 +1419,12 @@
   pointer-events: none;
 }
 
-.tooltip-category {
+:where(.dashboard) .tooltip-category {
   font-weight: 600;
   margin-bottom: 0.25rem;
 }
 
-.tooltip-value {
+:where(.dashboard) .tooltip-value {
   font-size: 1rem;
   font-weight: 700;
 }

@@ -422,7 +422,7 @@ export default function WeeklyProjections() {
               }
             }}
           >
-            Refresh ESPN Data
+            {ctx?.leagueKeyInput === "sample-demo" ? "Reload sample" : "Refresh ESPN Data"}
           </button>
         </div>
 
@@ -430,7 +430,7 @@ export default function WeeklyProjections() {
         <div className="projections-two-column">
           {/* LEFT COLUMN: PROJECTED */}
           <div className="projection-column projected-column">
-            <h2 className="column-title">📊 Projected</h2>
+            <h2 className="column-title">Projected</h2>
             
             {/* Projected Matchup Summary */}
             {projections.matchup && projections.opponent && (
@@ -571,13 +571,13 @@ export default function WeeklyProjections() {
 
           {/* RIGHT COLUMN: LIVE */}
           <div className="projection-column live-column">
-            <h2 className="column-title">🔴 Live</h2>
+            <h2 className="column-title">{ctx?.leagueKeyInput === "sample-demo" ? "Snapshot" : "Live"}</h2>
             
-            {/* Live Matchup Score */}
+            {/* {ctx?.leagueKeyInput === "sample-demo" ? "Saved matchup score" : "Live matchup score"} */}
             {liveMatchupScore && projections.opponent && (
               <Card className="matchup-summary-card live-card">
                 <div className="matchup-summary-header">
-                  <h3 className="card-title">Live Matchup Score</h3>
+                  <h3 className="card-title">{ctx?.leagueKeyInput === "sample-demo" ? "Saved matchup score" : "Live matchup score"}</h3>
                 </div>
                 <div className="matchup-summary-content">
                   <div className="matchup-teams">
@@ -653,13 +653,13 @@ export default function WeeklyProjections() {
               </Card>
             )}
 
-            {/* Live Biggest Contentions */}
+            {/* {ctx?.leagueKeyInput === "sample-demo" ? "Closest saved categories" : "Closest live categories"} */}
             <Card className="biggest-contention-card live-card">
-              <h3 className="card-title">Live Biggest Contentions</h3>
+              <h3 className="card-title">{ctx?.leagueKeyInput === "sample-demo" ? "Closest saved categories" : "Closest live categories"}</h3>
               {projections.opponent && topLiveContested.length > 0 ? (
                 <>
                   <p className="contention-description">
-                    Closest categories based on current live scores.
+                    {ctx?.leagueKeyInput === "sample-demo" ? "Closest categories based on saved scores." : "Closest categories based on current live scores."}
                   </p>
                   <div className="contested-categories-grid">
                     {topLiveContested.map((cat) => {
@@ -704,11 +704,11 @@ export default function WeeklyProjections() {
                 </>
               ) : projections.opponent ? (
                 <p className="no-opponent-message">
-                  Live category data not yet available. Check back once games start.
+                  {ctx?.leagueKeyInput === "sample-demo" ? "This snapshot does not include recorded category scores." : "Live category data not yet available. Check back once games start."}
                 </p>
               ) : (
                 <p className="no-opponent-message">
-                  No live matchup data available.
+                  {ctx?.leagueKeyInput === "sample-demo" ? "No recorded matchup in this snapshot." : "No live matchup data available."}
                 </p>
               )}
             </Card>
@@ -719,7 +719,7 @@ export default function WeeklyProjections() {
         {projections.opponent && finalContestedCategories.length > 0 && (
           <Card className="final-streaming-focus-card">
             <div className="final-focus-header">
-              <h2 className="card-title">🎯 Final Streaming Focus</h2>
+              <h2 className="card-title">Streaming Focus</h2>
               <p className="final-focus-description">
                 Top 4 most contested categories combining both projected and live analysis. Focus your streaming targets on these.
               </p>

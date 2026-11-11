@@ -1,3 +1,4 @@
+import Icon from "../components/Icon";
 import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import TopNav from "../components/TopNav";
@@ -143,14 +144,10 @@ export default function Dashboard() {
         threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
       };
       
-      const countingStats = categoryKeys.filter(k => k !== "fgPct" && k !== "ftPct");
-      const maxTeamValue = Math.max(...countingStats.map(k => selectedProfile.profile.rawTotals[k]));
-      const maxLeagueAvg = Math.max(...countingStats.map(k => profile.leagueAverage[k]));
-      const maxValue = Math.max(maxTeamValue, maxLeagueAvg, 100);
-      
       return categoryKeys.map((key) => {
         const teamValue = selectedProfile.profile.rawTotals[key];
         const leagueAvg = profile.leagueAverage[key];
+        const maxValue = Math.max(teamValue, leagueAvg, 0.001);
         
         let displayTeamValue: number;
         let displayLeagueAvg: number;
@@ -159,11 +156,11 @@ export default function Dashboard() {
         if (key === "fgPct" || key === "ftPct") {
           displayTeamValue = teamValue * 100;
           displayLeagueAvg = leagueAvg * 100;
-          displayOpponent = displayLeagueAvg * 0.95;
+          displayOpponent = displayLeagueAvg;
         } else {
           displayTeamValue = (teamValue / maxValue) * 100;
           displayLeagueAvg = (leagueAvg / maxValue) * 100;
-          displayOpponent = displayLeagueAvg * 0.95;
+          displayOpponent = displayLeagueAvg;
         }
         
         return {
@@ -187,19 +184,11 @@ export default function Dashboard() {
       threes: "3PM", fgPct: "FG%", ftPct: "FT%", tov: "TO",
     };
 
-    // Normalize for chart
-    const countingStats = categoryKeys.filter(k => k !== "fgPct" && k !== "ftPct" && k !== "tov");
-    const maxValue = Math.max(
-      ...countingStats.map(k => weeklyProjections.team.projectedTotals[k]),
-      ...countingStats.map(k => (weeklyProjections.opponent?.projectedTotals[k] || 0)),
-      ...countingStats.map(k => weeklyProjections.leagueAverages[k]),
-      100
-    );
-
     return categoryKeys.map((key) => {
       const teamValue = weeklyProjections.team.projectedTotals[key];
       const opponentValue = weeklyProjections.opponent?.projectedTotals[key] || 0;
       const leagueAvg = weeklyProjections.leagueAverages[key];
+      const maxValue = Math.max(teamValue, opponentValue, leagueAvg, 0.001);
 
       let displayTeamValue: number;
       let displayOpponentValue: number;
@@ -543,7 +532,7 @@ export default function Dashboard() {
     <TopNav>
       {apiError && (
         <div className="api-error-banner">
-          ⚠️ {apiError}
+          <Icon name="alert" /> {apiError}
         </div>
       )}
       <div className="dashboard">
@@ -558,7 +547,7 @@ export default function Dashboard() {
           <Card className="dashboard-card category-overview-card">
             <h2 className="card-title">Category Overview</h2>
             <div className="category-overview-description">
-              Your team's league rank for each of the 9 fantasy categories.
+              Your team's rank in each of the 9 categories. Lower ranks are stronger; tied teams share an average rank.
             </div>
             <div className="category-tiles-grid">
               {categoryKeys.map((key) => (
@@ -782,7 +771,7 @@ export default function Dashboard() {
             ) : (
               <div className="trade-suggestions-grid">
                 <div className="trade-suggestion-placeholder">
-                  <div className="trade-placeholder-icon">📊</div>
+                  <div className="trade-placeholder-icon"><Icon name="chart" size={28} /></div>
                   <p className="trade-placeholder-text">
                     No trade suggestions available
                   </p>

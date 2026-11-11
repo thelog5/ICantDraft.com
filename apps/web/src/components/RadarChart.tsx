@@ -55,9 +55,9 @@ export default function TeamRadarChart({ data }: RadarChartProps) {
         <Radar
           name="Team"
           dataKey="value"
-          stroke="#0066cc"
-          fill="#0066cc"
-          fillOpacity={0.3}
+          stroke="#d71920"
+          fill="#d71920"
+          fillOpacity={0.12}
         />
       </RadarChart>
     </ResponsiveContainer>

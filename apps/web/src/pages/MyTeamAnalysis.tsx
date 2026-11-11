@@ -1,3 +1,4 @@
+import Icon from "../components/Icon";
 import { useEffect, useState, useMemo } from "react";
 import TopNav from "../components/TopNav";
 import { useActiveContext } from "../hooks/useActiveContext";
@@ -345,15 +346,15 @@ export default function MyTeamAnalysis() {
       <div className="my-team-analysis">
         <div className="page-header">
           <div className="page-header-text">
-            <h1 className="page-title">Team Analysis: {ctx?.teamName || "My Team"}</h1>
-            <p className="page-subtitle">{ctx?.leagueName || ""}</p>
+            <h1 className="page-title">Team Analysis</h1>
+            <p className="page-subtitle">{ctx?.teamName || "My Team"} · {ctx?.leagueName || ""}</p>
           </div>
           <button 
             className="refresh-espn-button" 
             onClick={handleRefresh}
             disabled={refreshing || loading}
           >
-            {refreshing ? "Refreshing..." : "Refresh ESPN Data"}
+            {refreshing ? "Refreshing..." : ctx?.leagueKeyInput === "sample-demo" ? "Reload sample" : "Refresh ESPN Data"}
           </button>
         </div>
 
@@ -496,7 +497,7 @@ export default function MyTeamAnalysis() {
         <Card>
           <h2 className="card-title">Punt Strategy Recommendation</h2>
           <div className="punt-explanation-box">
-            <div className="punt-explanation-icon">💡</div>
+            <div className="punt-explanation-icon"><Icon name="info" size={24} /></div>
             <div className="punt-explanation-content">
               <p className="punt-explanation-title">What is "Punting" in 9-Cat Fantasy?</p>
               <p className="punt-explanation-text">
@@ -505,7 +506,7 @@ export default function MyTeamAnalysis() {
                 on 7-8 categories can be more effective than being mediocre across all 9.
               </p>
               <p className="punt-explanation-warning">
-                ⚠️ <strong>Note:</strong> Punting is a strategic choice, not mandatory. It depends on your league format, 
+                <strong>Note:</strong> Punting is a strategic choice, not mandatory. It depends on your league format,
                 roster construction, and trading opportunities. Use this as a guide, not a rule.
               </p>
             </div>

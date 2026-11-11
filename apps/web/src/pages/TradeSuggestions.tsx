@@ -483,9 +483,9 @@ export default function TradeSuggestions() {
         ) : (
           <>
             {warning && (
-              <div style={{ marginBottom: "1rem", background: "#fff3cd", border: "1px solid #ffc107", borderRadius: "4px" }}>
-                <div style={{ padding: "0.75rem", color: "#856404" }}>
-                  <strong>⚠️ {warning}</strong>
+              <div className="sample-data-note" role="note">
+                <div>
+                  <strong>{warning}</strong>
                 </div>
               </div>
             )}

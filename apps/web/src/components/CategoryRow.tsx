@@ -1,3 +1,4 @@
+import { rankDisplay } from "../lib/rankDisplay";
 import "./CategoryRow.css";
 
 type CategoryRowProps = {
@@ -15,30 +16,8 @@ export default function CategoryRow({
   totalTeams,
   value,
   leagueAverage,
-  isLowerBetter = false,
 }: CategoryRowProps) {
-  const percentile = isLowerBetter
-    ? ((totalTeams - rank + 1) / totalTeams) * 100
-    : ((totalTeams - rank + 1) / totalTeams) * 100;
-
-  const getRankText = () => {
-    if (rank === 1) return "1st";
-    if (rank === 2) return "2nd";
-    if (rank === 3) return "3rd";
-    return `${rank}th`;
-  };
-
-  const getBarColor = () => {
-    if (percentile >= 70) return "#00a651"; // green
-    if (percentile >= 40) return "#ffb81c"; // yellow
-    return "#e31837"; // red
-  };
-
-  const getTextColor = () => {
-    if (percentile >= 70) return "#00a651";
-    if (percentile >= 40) return "#ffb81c";
-    return "#e31837";
-  };
+  const display = rankDisplay(rank, totalTeams);
 
   return (
     <div className="category-row">
@@ -48,13 +27,13 @@ export default function CategoryRow({
           <div
             className="category-row-bar"
             style={{
-              width: `${percentile}%`,
-              backgroundColor: getBarColor(),
+              width: `${display.percentile}%`,
+              backgroundColor: display.color,
             }}
           />
         </div>
-        <div className="category-row-rank" style={{ color: getTextColor() }}>
-          {getRankText()}
+        <div className="category-row-rank" title={display.description} style={{ color: display.color }}>
+          {display.label}
         </div>
       </div>
       {value !== undefined && leagueAverage !== undefined && (

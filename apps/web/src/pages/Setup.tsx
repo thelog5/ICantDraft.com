@@ -1,3 +1,5 @@
+import { loadDemoSnapshot } from '../lib/demo';
+import { API_BASE_URL } from '../lib/api';
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { api } from '../lib/api';
@@ -6,14 +8,10 @@ import './Setup.css';
 
 // Check if app is in demo mode (from env)
 const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
-const DEMO_LEAGUE_ID = import.meta.env.VITE_DEMO_LEAGUE_ID;
-const DEMO_TEAM_ID = import.meta.env.VITE_DEMO_TEAM_ID;
+
+
 // Normalize API base URL (remove trailing slash)
-const getApiBase = () => {
-  const base = import.meta.env.VITE_API_BASE_URL || 'https://i-cant-draft-com-api-navy.vercel.app';
-  return base.replace(/\/+$/, ''); // Remove trailing slashes
-};
-const API_BASE = getApiBase();
+const API_BASE = API_BASE_URL;
 
 export default function Setup() {
   const navigate = useNavigate();
@@ -22,7 +20,7 @@ export default function Setup() {
 
   // Form state
   const [leagueId, setLeagueId] = useState('');
-  const [seasonId, setSeasonId] = useState(new Date().getFullYear());
+  const [seasonId, setSeasonId] = useState(new Date().getFullYear() + (new Date().getMonth() >= 9 ? 1 : 0));
   const [espnS2, setEspnS2] = useState('');
   const [swid, setSwid] = useState('');
 
@@ -57,6 +55,8 @@ export default function Setup() {
       // Just validate the credentials work and get team list (don't store in backend)
       const response = await fetch(`${API_BASE}/auth/espn/connect`, {
         method: 'POST',
+        credentials: 'include',
+        signal: AbortSignal.timeout(20000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           leagueId,
@@ -125,103 +125,14 @@ export default function Setup() {
   const handleDemoStart = async () => {
     setError(null);
     setLoading(true);
-
     try {
-      // If demo mode with env vars, use those directly
-      if (IS_DEMO_MODE && DEMO_LEAGUE_ID && DEMO_TEAM_ID) {
-        // Use env-provided demo IDs
-        setActiveContext({
-          leagueKeyInput: 'demo',
-          teamKeyInput: 'demo',
-          leagueId: DEMO_LEAGUE_ID,
-          teamId: DEMO_TEAM_ID,
-          leagueName: 'Demo League',
-          teamName: 'Demo Team',
-        });
-        
-        navigate('/dashboard');
-        return;
-      }
-
-      // Otherwise, fetch from API
-      // First, test if API is reachable
-      try {
-        const healthCheck = await fetch(`${API_BASE}/health`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        
-        if (!healthCheck.ok) {
-          throw new Error(`API health check failed: ${healthCheck.status}`);
-        }
-      } catch (healthErr: any) {
-        console.error('API health check failed:', healthErr);
-        setError(
-          `Cannot connect to API at ${API_BASE}. ` +
-          `Please verify:\n` +
-          `1. API is deployed and running\n` +
-          `2. VITE_API_BASE_URL is set correctly in Vercel\n` +
-          `3. CORS is configured to allow requests from this domain`
-        );
-        setLoading(false);
-        return;
-      }
-
-      // Now fetch demo info
-      let response: Response;
-      let data: any;
-      
-      try {
-        response = await fetch(`${API_BASE}/auth/demo/info`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include', // Include cookies for CORS
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          try {
-            data = JSON.parse(errorText);
-          } catch {
-            data = { message: errorText || `HTTP ${response.status}` };
-          }
-          setError(data.message || `Demo mode not available (${response.status})`);
-          setLoading(false);
-          return;
-        }
-
-        data = await response.json();
-      } catch (err: any) {
-        console.error('Demo fetch error:', err);
-        setError(
-          err.message?.includes('fetch') || err.message?.includes('Failed to fetch')
-            ? `Failed to fetch from API at ${API_BASE}. This is likely a CORS issue. Check that WEB_ORIGIN is set in your API's Vercel environment variables.`
-            : err.message || 'Failed to start demo mode. Please check your API configuration.'
-        );
-        setLoading(false);
-        return;
-      }
-
-      if (!data.success) {
-        setError(data.message || 'Demo mode not available');
-        setLoading(false);
-        return;
-      }
-
-      // Set active context using the existing system (same as before auth was added)
-      setActiveContext({
-        leagueKeyInput: data.leagueProviderLeagueId,
-        teamKeyInput: data.teamProviderTeamId,
-        leagueId: data.leagueId,
-        teamId: data.teamId,
-        leagueName: data.leagueName,
-        teamName: data.teamName,
-      });
-
-      // Success! Redirect to dashboard
+      const { info } = await loadDemoSnapshot();
+      setActiveContext({ leagueKeyInput: 'sample-demo', teamKeyInput: 'sample-demo',
+        leagueId: info.leagueId, teamId: info.teamId,
+        leagueName: info.leagueName, teamName: info.teamName });
       navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'An error occurred starting demo mode.');
+    } catch {
+      setError('The sample could not load. Please check your connection and try again.');
       setLoading(false);
     }
   };
@@ -232,7 +143,7 @@ export default function Setup() {
       <nav className="setup-nav">
         <div className="setup-nav-content">
           <Link to="/" className="setup-nav-logo">
-            <img src="/logo.png" alt="ICantDraft.com" className="setup-logo-image" />
+            <img src="/wordmark.png" alt="ICantDraft.com" className="setup-logo-image" />
           </Link>
           <div className="setup-nav-links">
             <Link to="/" className="setup-nav-link">
@@ -252,7 +163,7 @@ export default function Setup() {
             onClick={handleDemoStart}
             disabled={loading}
           >
-            {loading ? '⏳ Starting Demo...' : '🚀 Try Demo Now'}
+            {loading ? 'Starting Demo...' : 'Try Demo Now'}
           </button>
         </div>
 
@@ -393,18 +304,18 @@ export default function Setup() {
           <div className="setup-panel demo-panel">
             <h2 className="panel-title">Try Demo Mode</h2>
             <p className="demo-description">
-              Explore the full app with a <strong>real, active ESPN league</strong> — complete with actual players, teams, and live stats. No ESPN account needed.
+              Explore the full app with a <strong>saved ESPN league snapshot</strong> — complete with actual players, teams, and archived stats. No ESPN account needed.
             </p>
 
             <div className="demo-features">
-              <div className="demo-feature">✓ View AI-powered trade suggestions</div>
-              <div className="demo-feature">✓ Explore live weekly projections</div>
+              <div className="demo-feature">✓ View category-based trade suggestions</div>
+              <div className="demo-feature">✓ Explore sample weekly projections</div>
               <div className="demo-feature">✓ See smart streaming recommendations</div>
               <div className="demo-feature">✓ Analyze real team performance</div>
             </div>
 
             <p className="demo-note">
-              <strong>Note:</strong> Demo mode uses a real ESPN league with live data. This is not simulated — you'll see actual players and stats from an active fantasy league.
+              <strong>Note:</strong> Demo mode uses archived league data and illustrative schedules. It works without a database connection; it does not show live ESPN data.
             </p>
 
             {error && !connected && <div className="error-message">{error}</div>}

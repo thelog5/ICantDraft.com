@@ -24,7 +24,7 @@
   height: 120px;
   border-radius: 50%;
   overflow: hidden;
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  background: #4b5563;
   flex-shrink: 0;
   border: 4px solid #fff;
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
@@ -187,7 +187,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  background: #4b5563;
   color: #fff;
   font-size: 0.875rem;
   font-weight: 800;

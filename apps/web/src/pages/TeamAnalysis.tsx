@@ -135,7 +135,7 @@ export default function TeamAnalysis() {
         {p.meta.stats_missing && (
           <Card className="warning-card">
             <div className="warning-text">
-              ⚠️ Some player stats are missing. Results may be incomplete.
+              Some player stats are missing. Results may be incomplete.
             </div>
           </Card>
         )}

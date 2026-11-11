@@ -420,3 +420,6 @@
     padding: 1.5rem;
   }
 }
+.setup-page .setup-nav-logo { display:block; width:270px; height:52px; position:relative; overflow:hidden; }
+.setup-page .setup-logo-image { position:absolute; width:260px; height:auto; top:50%; transform:translateY(-50%); }
+@media(max-width:768px){.setup-page .setup-nav-logo{width:200px;height:42px;}.setup-page .setup-logo-image{width:195px;}}

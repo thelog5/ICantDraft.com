@@ -97,9 +97,9 @@ export default function WeeklyBarChart({ data }: WeeklyBarChartProps) {
           isAnimationActive={false}
         />
         <Legend wrapperStyle={{ fontSize: '0.875rem' }} />
-        <Bar dataKey="myTeam" fill="#0066cc" name="Your Team" />
-        <Bar dataKey="opponent" fill="#999" name="Opponent" />
-        <Bar dataKey="leagueAvg" fill="#ffb81c" name="League Avg" />
+        <Bar dataKey="myTeam" fill="#d71920" name="Your Team" />
+        <Bar dataKey="opponent" fill="#515761" name="Opponent" />
+        <Bar dataKey="leagueAvg" fill="#c5c8cc" name="League Avg" />
       </BarChart>
     </ResponsiveContainer>
   );

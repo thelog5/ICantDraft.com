@@ -1,92 +1,52 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useLayoutEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { getActiveContext } from "../lib/activeContext";
+import Icon from "./Icon";
 import "./TopNav.css";
+import "./Product.css";
 
-type TopNavProps = {
-  children: ReactNode;
-};
-
-export default function TopNav({ children }: TopNavProps) {
-  const location = useLocation();
-  const [leagueName, setLeagueName] = useState<string | null>(null);
-  const [teamName, setTeamName] = useState<string | null>(null);
-
-  useEffect(() => {
-    const ctx = getActiveContext();
-    if (ctx) {
-      if (ctx.leagueName) setLeagueName(ctx.leagueName);
-      if (ctx.teamName) setTeamName(ctx.teamName);
-    }
-  }, [location.pathname]); // Re-check on route change
-
-  const isActive = (path: string) => {
-    return location.pathname === path;
-  };
-
+const views = [
+  ["/dashboard", "Overview"],
+  ["/weekly-projections", "Weekly Projections"],
+  ["/team-analysis", "Team Analysis"],
+  ["/trade-suggestions", "Trade Suggestions"],
+  ["/streaming", "Streaming"],
+  ["/settings", "Settings"],
+];
+export default function TopNav({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  const navRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+    const nav = navRef.current;
+    const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (nav && active) nav.scrollLeft = active.offsetLeft - nav.offsetLeft - nav.clientWidth / 2 + active.clientWidth / 2;
+  }, [pathname]);
+  const ctx = getActiveContext();
+  const sample = ctx?.leagueKeyInput === "sample-demo";
   return (
     <div className="topnav-layout">
+      <a className="skip-to-content" href="#product-content">Skip to content</a>
       <header className="topnav-header">
-        <div className="topnav-left">
-          <Link to="/" className="topnav-logo">
-            <img src="/logo.png" alt="ICantDraft.com" className="logo-image" />
+        <div className="topnav-brand-row">
+          <Link to="/" className="topnav-logo" aria-label="ICantDraft.com home">
+            <img src="/wordmark.png" alt="ICantDraft.com" className="logo-image" />
           </Link>
-          <nav className="topnav-tabs">
-            <Link
-              to="/dashboard"
-              className={`topnav-tab ${isActive("/dashboard") ? "active" : ""}`}
-            >
-              Home
-            </Link>
-            <Link
-              to="/weekly-projections"
-              className={`topnav-tab ${isActive("/weekly-projections") ? "active" : ""}`}
-            >
-              Weekly Projections
-            </Link>
-            <Link
-              to="/team-analysis"
-              className={`topnav-tab ${isActive("/team-analysis") ? "active" : ""}`}
-            >
-              Team Analysis
-            </Link>
-            <Link
-              to="/trade-suggestions"
-              className={`topnav-tab ${isActive("/trade-suggestions") ? "active" : ""}`}
-            >
-              Trade Suggestions
-            </Link>
-            <Link
-              to="/streaming"
-              className={`topnav-tab ${isActive("/streaming") ? "active" : ""}`}
-            >
-              Streaming
-            </Link>
-            <Link
-              to="/settings"
-              className={`topnav-tab ${isActive("/settings") ? "active" : ""}`}
-            >
-              Settings
-            </Link>
-          </nav>
+          <div className="topnav-sport"><Icon name="ball" size={17} /><span>FANTASY BASKETBALL</span><span className="sport-format">9-CAT</span></div>
+          <Link to="/settings" className="topnav-account"><span className="account-avatar">{ctx?.teamName?.slice(0, 2).toUpperCase() || 'IC'}</span><span>My workspace</span></Link>
         </div>
-        <div className="topnav-right">
-          {leagueName && (
-            <div className="topnav-league">
-              <span className="topnav-league-label">League:</span>
-              <span className="topnav-league-name">{leagueName}</span>
-            </div>
-          )}
-          {teamName && (
-            <div className="topnav-team">
-              <span className="topnav-team-label">My Team:</span>
-              <span className="topnav-team-name">{teamName}</span>
-            </div>
-          )}
-        </div>
+        <nav ref={navRef} className="topnav-tabs" aria-label="Product navigation">
+          {views.map(([path, label]) => <Link key={path} to={path} aria-current={pathname === path ? "page" : undefined} className={`topnav-tab ${pathname === path ? "active" : ""}`}>{label}</Link>)}
+        </nav>
       </header>
-      <main className="topnav-main">{children}</main>
+      <div className="workspace-context">
+        <div className="workspace-context-inner">
+          <div className="context-league"><span className="context-label">YOUR LEAGUE</span><strong>{ctx?.leagueName || "Fantasy workspace"}</strong><span className="context-divider"/><span className="context-team">{ctx?.teamName || "Select your team"}</span></div>
+          <div className="context-status"><span className="status-dot"/>{sample ? "SAMPLE DATA" : "ESPN LEAGUE"}{sample && <span className="sample-caption">Archived stats · Illustrative schedules</span>}</div>
+        </div>
+      </div>
+      <main id="product-content" className="topnav-main" tabIndex={-1}>{children}</main>
+      <footer className="product-footer"><span>ICANTDRAFT<span className="brand-red">.COM</span></span><span>Know your roster. Own your league.</span><span>Fantasy basketball intelligence</span></footer>
     </div>
   );
 }
-

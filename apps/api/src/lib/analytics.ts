@@ -297,7 +297,7 @@ export type NineCatStats = {
     d: LeagueDistribution
   ): NineCatStats {
     const z = (v: number, m: number, s: number) =>
-      s === 0 ? 0 : (v - m) / s;
+      !Number.isFinite(v) || !Number.isFinite(s) || s <= 0 ? 0 : (v - m) / s;
   
     return {
       pts: z(t.pts, d.mean.pts, d.std.pts),
@@ -332,11 +332,13 @@ export type NineCatStats = {
       const inv = c === "tov";
       [...teams]
         .sort((a, b) => (inv ? a[c] - b[c] : b[c] - a[c]))
-        .forEach((t, i) => {
+        .forEach((t) => {
           const r =
             ranks.get(t.teamId) ??
             { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, threes: 0, fgPct: 0, ftPct: 0, tov: 0 };
-          r[c] = i + 1;
+          const better = teams.filter(other => inv ? other[c] < t[c] : other[c] > t[c]).length;
+          const tied = teams.filter(other => other[c] === t[c]).length;
+          r[c] = better + (tied + 1) / 2;
           ranks.set(t.teamId, r);
         });
     }

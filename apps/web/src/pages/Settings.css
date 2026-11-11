@@ -4,25 +4,25 @@
   margin: 0 auto;
 }
 
-.settings-title {
+:where(.settings-page) .settings-title {
   font-size: 2rem;
   font-weight: 700;
   color: #222;
   margin-bottom: 2rem;
 }
 
-.settings-card {
+:where(.settings-page) .settings-card {
   background-color: #fff;
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   padding: 2rem;
 }
 
-.settings-content {
+:where(.settings-page) .settings-content {
   margin-top: 1rem;
 }
 
-.settings-message {
+:where(.settings-page) .settings-message {
   padding: 0.75rem 1rem;
   background-color: #e6f2ff;
   border: 1px solid #0066cc;
@@ -33,13 +33,13 @@
   font-weight: 500;
 }
 
-.settings-description {
+:where(.settings-page) .settings-description {
   color: #666;
   margin-bottom: 1.5rem;
   line-height: 1.6;
 }
 
-.settings-current {
+:where(.settings-page) .settings-current {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -50,21 +50,21 @@
   margin-bottom: 1.5rem;
 }
 
-.settings-current-label {
+:where(.settings-page) .settings-current-label {
   font-weight: 600;
   color: #0066cc;
 }
 
-.settings-current-value {
+:where(.settings-page) .settings-current-value {
   color: #222;
   font-weight: 500;
 }
 
-.settings-input-group {
+:where(.settings-page) .settings-input-group {
   margin-bottom: 1.5rem;
 }
 
-.settings-label {
+:where(.settings-page) .settings-label {
   display: block;
   font-weight: 600;
   color: #222;
@@ -72,7 +72,7 @@
   font-size: 0.9375rem;
 }
 
-.settings-input {
+:where(.settings-page) .settings-input {
   width: 100%;
   padding: 0.75rem;
   border: 1px solid #ddd;
@@ -81,12 +81,12 @@
   transition: border-color 0.2s;
 }
 
-.settings-input:focus {
+:where(.settings-page) .settings-input:focus {
   outline: none;
   border-color: #0066cc;
 }
 
-.settings-error {
+:where(.settings-page) .settings-error {
   padding: 0.75rem;
   background-color: #fee;
   border: 1px solid #e31837;
@@ -96,7 +96,7 @@
   font-size: 0.875rem;
 }
 
-.settings-success {
+:where(.settings-page) .settings-success {
   padding: 0.75rem;
   background-color: #d4edda;
   border: 1px solid #00a651;
@@ -106,7 +106,7 @@
   font-size: 0.875rem;
 }
 
-.settings-save-button {
+:where(.settings-page) .settings-save-button {
   width: 100%;
   padding: 0.875rem;
   background-color: #0066cc;
@@ -119,17 +119,17 @@
   transition: background-color 0.2s;
 }
 
-.settings-save-button:hover:not(:disabled) {
+:where(.settings-page) .settings-save-button:hover:not(:disabled) {
   background-color: #0052a3;
 }
 
-.settings-save-button:disabled {
+:where(.settings-page) .settings-save-button:disabled {
   background-color: #ccc;
   cursor: not-allowed;
 }
 
 /* Session Info */
-.session-info {
+:where(.settings-page) .session-info {
   display: flex;
   flex-direction: column;
   gap: 0.875rem;
@@ -140,23 +140,23 @@
   border: 1px solid #e5e7eb;
 }
 
-.session-info-row {
+:where(.settings-page) .session-info-row {
   display: flex;
   gap: 1rem;
 }
 
-.session-label {
+:where(.settings-page) .session-label {
   font-weight: 600;
   color: #6b7280;
   min-width: 80px;
 }
 
-.session-value {
+:where(.settings-page) .session-value {
   color: #111;
   font-weight: 500;
 }
 
-.settings-logout-button {
+:where(.settings-page) .settings-logout-button {
   width: 100%;
   padding: 0.875rem;
   background-color: #dc2626;
@@ -169,7 +169,7 @@
   transition: background-color 0.2s;
 }
 
-.settings-logout-button:hover {
+:where(.settings-page) .settings-logout-button:hover {
   background-color: #b91c1c;
 }
 

@@ -1,3 +1,4 @@
+import Icon from "../components/Icon";
 import { useNavigate } from 'react-router-dom';
 import './Landing.css';
 
@@ -17,7 +18,7 @@ export default function Landing() {
       <nav className="landing-nav">
         <div className="nav-content">
           <div className="nav-brand" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} style={{ cursor: 'pointer' }}>
-            <img src="/logo.png" alt="ICantDraft.com" className="nav-brand-logo" />
+            <img src="/wordmark.png" alt="ICantDraft.com" className="nav-brand-logo" />
           </div>
           <div className="nav-links">
             <button className="nav-link" onClick={() => scrollToSection('features')}>
@@ -40,15 +41,14 @@ export default function Landing() {
       <section className="hero">
         <div className="hero-content">
           <div className="hero-badge">Fantasy Basketball Analytics</div>
-          <h1 className="hero-title">
-            <span className="title-main">ICantDraft</span>
-            <span className="title-sub">.com</span>
+          <h1 className="hero-title hero-wordmark">
+            <img src="/wordmark.png" alt="ICantDraft.com" />
           </h1>
           <p className="hero-subtitle">
             Advanced 9-category analytics for ESPN Fantasy Basketball
           </p>
           <p className="hero-description">
-            Make smarter roster decisions with AI-powered trade suggestions, 
+            Make smarter roster decisions with category-based trade suggestions,
             live weekly projections, intelligent streaming recommendations, and comprehensive team analysis.
           </p>
         </div>
@@ -61,6 +61,8 @@ export default function Landing() {
             <video 
               className="main-video" 
               controls
+              preload="none"
+              poster="/media/posters/main-demo.jpg"
               playsInline
             >
               <source src="/media/videos/main-demo.mp4" type="video/mp4" />
@@ -74,15 +76,15 @@ export default function Landing() {
       <section className="demo-cta-section">
         <div className="demo-cta-content">
           <div className="demo-cta-text">
-            <h2 className="demo-cta-title">Try It Now with Real Data</h2>
+            <h2 className="demo-cta-title">Try It Now with Sample Data</h2>
             <p className="demo-cta-description">
-              Experience the full platform instantly with a live ESPN league. No sign-up required — 
-              see actual players, real stats, and all features in action. This isn't a simulation — 
-              it's a real fantasy basketball league with live data from ESPN.
+              Experience the full platform instantly with an archived ESPN league. No sign-up required —
+              see actual players, archived stats, and the features in action.
+              The demo uses saved data and illustrative schedules, with no database connection needed.
             </p>
             <ul className="demo-features-list">
-              <li>✓ View AI-powered trade suggestions</li>
-              <li>✓ Explore live weekly matchup projections</li>
+              <li>✓ View Category-based trade suggestions</li>
+              <li>✓ Explore sample weekly matchup projections</li>
               <li>✓ See smart streaming recommendations</li>
               <li>✓ Analyze real team performance data</li>
             </ul>
@@ -103,7 +105,7 @@ export default function Landing() {
       <section id="features" className="features-showcase">
         <h2 className="section-title">Everything You Need to Dominate Your League</h2>
         <p className="section-description">
-          All features use live data from ESPN — no simulations, just real players and stats.
+          Connect your league for ESPN data, or explore the demo with archived stats and illustrative schedules.
         </p>
 
         {/* Feature 1: Trade Suggestions */}
@@ -112,21 +114,18 @@ export default function Landing() {
             <div className="feature-video-placeholder feature-video-trade">
               {<video 
                 className="feature-video" 
-                autoPlay
-                loop
-                muted
+                controls
+                preload="none"
                 playsInline
-              >
+               poster="/media/posters/trade-suggestions.jpg" aria-label="Trade suggestions walkthrough">
                 <source src="/media/videos/trade-suggestions.mp4" type="video/mp4" />
               </video> }
-              <span className="placeholder-label">Trade Suggestions Demo</span>
-              <p className="placeholder-text">AI-powered trade analysis with win probability calculations</p>
             </div>
           </div>
           <div className="feature-showcase-text">
-            <h3 className="feature-showcase-title">AI-Powered Trade Suggestions</h3>
+            <h3 className="feature-showcase-title">Category-Based Trade Suggestions</h3>
             <p className="feature-showcase-description">
-              Stop guessing if a trade is fair. Our AI engine analyzes every possible trade combination 
+              Stop guessing if a trade is fair. Our analysis engine compares trade combinations
               across your league, calculating win probability, category balance, and player value using 
               advanced Z-score normalization.
             </p>
@@ -159,15 +158,12 @@ export default function Landing() {
              
               {<video 
                 className="feature-video" 
-                autoPlay
-                loop
-                muted
+                controls
+                preload="none"
                 playsInline
-              >
+               poster="/media/posters/weekly-projections.jpg" aria-label="Weekly projections walkthrough">
                 <source src="/media/videos/weekly-projections.mp4" type="video/mp4" />
               </video>}
-              <span className="placeholder-label">Weekly Projections Demo</span>
-              <p className="placeholder-text">Projected vs Live scores with contested categories</p>
             </div>
           </div>
         </div>
@@ -179,15 +175,12 @@ export default function Landing() {
              
               { <video 
                 className="feature-video" 
-                autoPlay
-                loop
-                muted
+                controls
+                preload="none"
                 playsInline
-              >
+               poster="/media/posters/streaming-assistant.jpg" aria-label="Streaming assistant walkthrough">
                 <source src="/media/videos/streaming-assistant.mp4" type="video/mp4" />
               </video> }
-              <span className="placeholder-label">Streaming Assistant Demo</span>
-              <p className="placeholder-text">Day-by-day waiver recommendations targeting your needs</p>
             </div>
           </div>
           <div className="feature-showcase-text">
@@ -225,15 +218,12 @@ export default function Landing() {
             
               {<video 
                 className="feature-video" 
-                autoPlay
-                loop
-                muted
+                controls
+                preload="none"
                 playsInline
-              >
+               poster="/media/posters/team-analysis.jpg" aria-label="Team analysis walkthrough">
                 <source src="/media/videos/team-analysis.mp4" type="video/mp4" />
               </video> }
-              <span className="placeholder-label">Team Analysis Demo</span>
-              <p className="placeholder-text">Power rankings and category analysis</p>
             </div>
           </div>
         </div>
@@ -285,7 +275,7 @@ export default function Landing() {
               </div>
               
               <div className="security-note">
-                <span className="security-icon">🔒</span>
+                <span className="security-icon"><Icon name="shield" size={22} /></span>
                 <p>Your credentials are encrypted server-side and never stored in your browser. We only use them to fetch your league data from ESPN.</p>
               </div>
             </div>
